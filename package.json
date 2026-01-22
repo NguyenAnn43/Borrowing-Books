@@ -1,0 +1,43 @@
+{
+  "name": "borrowing-books",
+  "version": "1.0.0",
+  "description": "Inter-Library Management System - Hệ thống quản lý thư viện liên trường",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "npm run dev --workspace=client",
+    "dev:server": "npm run dev --workspace=server",
+    "build": "npm run build --workspaces",
+    "build:client": "npm run build --workspace=client",
+    "build:server": "npm run build --workspace=server",
+    "lint": "pnpm -r lint",
+    "lint:client": "npm run lint --workspace=client",
+    "lint:server": "npm run lint --workspace=server",
+    "test": "pnpm -r test",
+    "clean": "rm -rf node_modules client/node_modules server/node_modules shared/node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "vitest": "^4.0.17"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": [
+    "library",
+    "management",
+    "inter-library",
+    "borrowing",
+    "nextjs",
+    "nodejs",
+    "mongodb"
+  ],
+  "author": "Team",
+  "license": "MIT"
+}
