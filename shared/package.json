@@ -3,7 +3,9 @@
     "version": "1.0.0",
     "description": "Shared code between client and server",
     "main": "index.js",
-    "scripts": {},
+    "scripts": {
+        "build": "echo 'No build step for shared'"
+    },
     "keywords": [],
     "license": "MIT"
 }
