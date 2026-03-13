@@ -1,6 +1,6 @@
 import mongoose, { Schema, Model } from 'mongoose';
 import { IReservation } from '../types';
-import { RESERVATION_STATUS } from '../utils/constants';
+import { RESERVATION_STATUS, RESERVATION_SETTINGS } from '../utils/constants';
 
 const reservationSchema = new Schema<IReservation>(
     {
@@ -23,14 +23,28 @@ const reservationSchema = new Schema<IReservation>(
             type: Date,
             default: Date.now,
         },
+        /**
+         * Not set at creation time.
+         * Only set (or reset) when the reservation transitions to READY.
+         * This prevents expiry before the librarian has a chance to action it.
+         */
         expiryDate: {
             type: Date,
-            required: [true, 'Expiry date is required'],
+            default: null,
         },
         status: {
             type: String,
             enum: Object.values(RESERVATION_STATUS),
             default: RESERVATION_STATUS.PENDING,
+        },
+        /**
+         * Populated when the reservation is fulfilled.
+         * Enables end-to-end traceability: Reservation → Borrowing.
+         */
+        borrowingId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Borrowing',
+            default: null,
         },
     },
     {
@@ -54,16 +68,17 @@ reservationSchema.pre(/^find/, function (next) {
     next();
 });
 
-// Check if reservation is expired
+// Check if READY reservation is expired (only meaningful when status=READY)
 reservationSchema.methods.checkExpiry = function (): void {
-    if (this.status !== RESERVATION_STATUS.PENDING && this.status !== RESERVATION_STATUS.READY) {
-        return;
-    }
-
+    if (this.status !== RESERVATION_STATUS.READY) return;
+    if (!this.expiryDate) return;
     if (new Date() > this.expiryDate) {
         this.status = RESERVATION_STATUS.EXPIRED;
     }
 };
+
+// Unused but kept for reference
+void RESERVATION_SETTINGS;
 
 const Reservation: Model<IReservation> = mongoose.model<IReservation>('Reservation', reservationSchema);
 

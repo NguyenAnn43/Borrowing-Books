@@ -20,7 +20,9 @@ cd Borrowing-Books
 ```bash
 # Install tất cả dependencies cho monorepo
 npm install
-
+Error: Error: Lexical error on line 7:. Unrecognized text.
+...ipant DB;    Actor->>UI: Selects Updat
+---------------------^
 # Hoặc dùng pnpm
 pnpm install
 ```

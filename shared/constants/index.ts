@@ -28,6 +28,8 @@ export const BORROWING_STATUS = {
     BORROWED: 'borrowed',
     RETURNED: 'returned',
     OVERDUE: 'overdue',
+    /** User cancelled the pending request */
+    CANCELLED: 'cancelled',
 } as const;
 
 export const RESERVATION_STATUS = {
@@ -45,6 +47,23 @@ export const NOTIFICATION_TYPE = {
     SYSTEM: 'system',
 } as const;
 
+// Book categories — canonical list (SSOT)
+export const BOOK_CATEGORIES = [
+    'Công nghệ thông tin',
+    'Khoa học tự nhiên',
+    'Khoa học xã hội',
+    'Kinh tế',
+    'Lịch sử',
+    'Văn học',
+    'Ngoại ngữ',
+    'Giáo dục',
+    'Nghệ thuật',
+    'Y học',
+    'Luật',
+    'Triết học',
+    'Khác',
+] as const;
+
 // Pagination defaults
 export const PAGINATION = {
     DEFAULT_PAGE: 1,
@@ -57,6 +76,16 @@ export const BORROWING_SETTINGS = {
     DEFAULT_BORROW_DAYS: 14,
     MAX_BORROW_LIMIT: 5,
     OVERDUE_FINE_PER_DAY: 5000, // VND
+    /** Max number of renewals per borrowing */
+    MAX_RENEWALS: 2,
+    /** Extension per renewal in days */
+    RENEWAL_DAYS: 7,
+} as const;
+
+// Reservation settings
+export const RESERVATION_SETTINGS = {
+    /** Days before a READY reservation expires */
+    EXPIRY_DAYS: 3,
 } as const;
 
 // Types
@@ -67,3 +96,4 @@ export type BookStatus = typeof BOOK_STATUS[keyof typeof BOOK_STATUS];
 export type BorrowingStatus = typeof BORROWING_STATUS[keyof typeof BORROWING_STATUS];
 export type ReservationStatus = typeof RESERVATION_STATUS[keyof typeof RESERVATION_STATUS];
 export type NotificationType = typeof NOTIFICATION_TYPE[keyof typeof NOTIFICATION_TYPE];
+export type BookCategory = typeof BOOK_CATEGORIES[number];

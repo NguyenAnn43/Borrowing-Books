@@ -12,6 +12,7 @@ import swaggerSpec from './config/swagger';
 import { logger } from './utils';
 import routes from './routes';
 import { errorHandler, notFound } from './middlewares';
+import { startScheduler } from './jobs/scheduler';
 
 // Initialize Express app
 const app: Application = express();
@@ -84,6 +85,11 @@ app.listen(PORT, () => {
     logger.info(`Server running in ${config.NODE_ENV} mode on port ${PORT}`);
     logger.info(`API Documentation: http://localhost:${PORT}/api-docs`);
 });
+
+// Start scheduled jobs (never in test environment to avoid hanging test suites)
+if (process.env.NODE_ENV !== 'test') {
+    startScheduler();
+}
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err: Error) => {

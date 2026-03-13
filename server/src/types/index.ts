@@ -9,7 +9,7 @@ export interface IUser extends Document {
     fullName: string;
     phone?: string;
     avatar?: string;
-    role: 'admin' | 'librarian' | 'user';
+    role: 'admin' | 'librarian' | 'user' | 'guest';
     libraryId?: Types.ObjectId;
     status: 'active' | 'inactive' | 'banned';
     maxBorrowLimit: number;
@@ -68,11 +68,21 @@ export interface IBorrowing extends Document {
     libraryId: Types.ObjectId;
     borrowDate: Date;
     dueDate: Date;
+    /**
+     * @deprecated Use `actualReturnDate` instead.
+     * Kept for backwards-compat; mirrored from `actualReturnDate` on save.
+     */
     returnDate?: Date;
     actualReturnDate?: Date;
-    status: 'pending' | 'borrowed' | 'returned' | 'overdue';
+    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'cancelled';
     fineAmount: number;
     isFined: boolean;
+    /** Whether the fine has been paid by the user */
+    finePaid: boolean;
+    /** Number of times this borrowing has been renewed */
+    renewalCount: number;
+    /** Maximum allowed renewals */
+    maxRenewals: number;
     notes?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -86,8 +96,11 @@ export interface IReservation extends Document {
     bookId: Types.ObjectId;
     libraryId: Types.ObjectId;
     reservationDate: Date;
-    expiryDate: Date;
+    /** Only set when status transitions to READY */
+    expiryDate?: Date;
     status: 'pending' | 'ready' | 'completed' | 'cancelled' | 'expired';
+    /** Set when reservation is fulfilled — links to the Borrowing record */
+    borrowingId?: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
     checkExpiry(): void;

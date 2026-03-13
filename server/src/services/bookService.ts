@@ -1,3 +1,4 @@
+import { ClientSession } from 'mongoose';
 import { Book } from '../models';
 import { AppError, formatPagination, sanitizeObject, PAGINATION } from '../utils';
 import { IBook, PaginationMeta } from '../types';
@@ -95,17 +96,54 @@ export const deleteBook = async (id: string): Promise<IBook> => {
 };
 
 /**
- * Update book availability
+ * Atomically decrement availableCopies only if > 0.
+ * Returns the updated book, or throws BOOK_UNAVAILABLE if no copies left.
+ * Accepts an optional Mongoose session for use within transactions.
  */
-export const updateAvailability = async (id: string, change: number): Promise<IBook> => {
-    const book = await Book.findById(id) as IBook | null;
+export const decrementAvailabilityAtomic = async (
+    id: string,
+    session?: ClientSession
+): Promise<IBook> => {
+    const book = await Book.findOneAndUpdate(
+        { _id: id, availableCopies: { $gt: 0 } },
+        { $inc: { availableCopies: -1 } },
+        { new: true, session }
+    ) as IBook | null;
+
+    if (!book) {
+        throw new AppError('Book is not available (no copies left)', 400, 'BOOK_UNAVAILABLE');
+    }
+
+    return book;
+};
+
+/**
+ * Atomically increment availableCopies.
+ * Accepts an optional Mongoose session for use within transactions.
+ */
+export const incrementAvailabilityAtomic = async (
+    id: string,
+    session?: ClientSession
+): Promise<IBook> => {
+    const book = await Book.findByIdAndUpdate(
+        id,
+        { $inc: { availableCopies: 1 } },
+        { new: true, session }
+    ) as IBook | null;
 
     if (!book) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
     }
 
-    book.availableCopies = Math.max(0, book.availableCopies + change);
-    await book.save();
-
     return book;
+};
+
+/**
+ * @deprecated Use decrementAvailabilityAtomic or incrementAvailabilityAtomic instead.
+ */
+export const updateAvailability = async (id: string, change: number): Promise<IBook> => {
+    if (change < 0) {
+        return decrementAvailabilityAtomic(id);
+    }
+    return incrementAvailabilityAtomic(id);
 };

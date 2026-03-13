@@ -17,6 +17,10 @@
         "sourceMap": true,
         "moduleResolution": "node",
         "allowSyntheticDefaultImports": true,
+        "baseUrl": ".",
+        "paths": {
+            "shared/constants": ["../shared/constants/index.ts"]
+        },
         "noImplicitAny": true,
         "strictNullChecks": true,
         "strictFunctionTypes": true,

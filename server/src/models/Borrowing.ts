@@ -28,6 +28,9 @@ const borrowingSchema = new Schema<IBorrowing>(
             type: Date,
             required: [true, 'Due date is required'],
         },
+        /**
+         * @deprecated Use actualReturnDate. Mirrored on save for backwards compat.
+         */
         returnDate: {
             type: Date,
             default: null,
@@ -48,6 +51,20 @@ const borrowingSchema = new Schema<IBorrowing>(
         isFined: {
             type: Boolean,
             default: false,
+        },
+        /** Whether the outstanding fine has been paid */
+        finePaid: {
+            type: Boolean,
+            default: false,
+        },
+        renewalCount: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+        maxRenewals: {
+            type: Number,
+            default: BORROWING_SETTINGS.MAX_RENEWALS,
         },
         notes: {
             type: String,
@@ -71,6 +88,14 @@ borrowingSchema.pre(/^find/, function (next) {
         .populate('userId', 'fullName email')
         .populate('bookId', 'title author coverImage')
         .populate('libraryId', 'name code');
+    next();
+});
+
+// Mirror returnDate from actualReturnDate for backwards compat
+borrowingSchema.pre('save', function (next) {
+    if (this.actualReturnDate) {
+        this.returnDate = this.actualReturnDate;
+    }
     next();
 });
 

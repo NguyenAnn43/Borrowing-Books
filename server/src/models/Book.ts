@@ -44,10 +44,7 @@ const bookSchema = new Schema<IBook>(
         pageCount: {
             type: Number,
         },
-        tags: [{
-            type: String,
-            trim: true,
-        }],
+        tags: [{ type: String, trim: true }],
         location: {
             type: String,
             trim: true,
@@ -84,7 +81,9 @@ const bookSchema = new Schema<IBook>(
 bookSchema.index({ title: 'text', author: 'text', tags: 'text' });
 bookSchema.index({ libraryId: 1, status: 1 });
 bookSchema.index({ category: 1 });
-bookSchema.index({ isbn: 1 });
+// [P2] Sparse unique index: allows multiple documents with no ISBN (null/undefined)
+// but enforces uniqueness among documents that DO have an ISBN value.
+bookSchema.index({ isbn: 1 }, { unique: true, sparse: true });
 
 // Validate availableCopies <= totalCopies
 bookSchema.pre('save', function (next) {
