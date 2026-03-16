@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AppError } from '../utils';
-import { AuthRequest, IUser } from '../types';
+import { AuthRequest } from '../types';
 import { Role } from '../utils/constants';
 
 /**

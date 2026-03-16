@@ -52,7 +52,9 @@ export const getUserById = asyncHandler(async (req: Request, res: Response) => {
  */
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     // Prevent updating sensitive fields
-    const { password, role, ...updateData } = req.body;
+    const updateData: Record<string, unknown> = { ...req.body };
+    delete updateData.password;
+    delete updateData.role;
 
     const user = await User.findByIdAndUpdate(
         req.params.id,

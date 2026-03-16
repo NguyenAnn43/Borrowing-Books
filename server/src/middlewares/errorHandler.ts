@@ -12,7 +12,6 @@ export const errorHandler = (
     _next: NextFunction
 ): void => {
     const statusCode = (err as AppError).statusCode || 500;
-    const status = (err as AppError).status || 'error';
 
     // Log error
     logger.error(`${statusCode} - ${err.message} - ${req.originalUrl} - ${req.method}`);

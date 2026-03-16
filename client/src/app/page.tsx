@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui";
-import { BookOpen, Users, Library, Shield, ArrowRight, Search, Globe, Clock, CheckCircle2 } from "lucide-react";
+import { BookOpen, Shield, ArrowRight, Search, Globe, Clock, CheckCircle2 } from "lucide-react";
 
 export default function HomePage() {
   return (

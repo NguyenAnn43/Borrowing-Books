@@ -47,13 +47,7 @@ vi.mock('./notificationService', () => ({
 
 import * as reservationService from './reservationService';
 import { RESERVATION_STATUS } from '../utils/constants';
-import { IUser, IReservation, IBook } from '../types';
-
-const makeUser = (overrides = {}): Partial<IUser> => ({
-    _id: new Types.ObjectId(),
-    role: 'user',
-    ...overrides,
-});
+import { IReservation, IBook } from '../types';
 
 const makeBook = (overrides = {}): Partial<IBook> => ({
     _id: new Types.ObjectId(),

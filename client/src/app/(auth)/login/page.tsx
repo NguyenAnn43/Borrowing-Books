@@ -20,7 +20,10 @@ export default function LoginPage() {
     const router = useRouter();
     const { login, isLoading, error, clearError, isAuthenticated, user, logout, continueAsGuest, lastLoginAccount, getCurrentUser } = useAuthStore();
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [rememberMe, setRememberMe] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return Boolean(localStorage.getItem("rememberedEmail"));
+    });
     const [showLoginForm, setShowLoginForm] = useState(false);
 
     const {
@@ -40,7 +43,6 @@ export default function LoginPage() {
         const rememberedEmail = localStorage.getItem("rememberedEmail");
         if (rememberedEmail) {
             setValue("email", rememberedEmail);
-            setRememberMe(true);
         }
     }, [setValue]);
 
