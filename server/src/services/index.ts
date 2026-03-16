@@ -3,3 +3,4 @@ export * as bookService from './bookService';
 export * as borrowingService from './borrowingService';
 export * as notificationService from './notificationService';
 export * as reservationService from './reservationService';
+export * as wishlistService from './wishlistService';

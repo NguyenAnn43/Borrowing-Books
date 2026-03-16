@@ -1,12 +1,16 @@
 import { Request, Response } from 'express';
 import { bookService } from '../services';
 import { asyncHandler } from '../utils';
+import { AuthRequest } from '../types';
 
 /**
  * Get all books
  */
-export const getBooks = asyncHandler(async (req: Request, res: Response) => {
-    const result = await bookService.getBooks(req.query as unknown as Parameters<typeof bookService.getBooks>[0]);
+export const getBooks = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await bookService.getBooks({
+        ...(req.query as unknown as Parameters<typeof bookService.getBooks>[0]),
+        userId: req.user?._id.toString(),
+    });
 
     res.json({
         success: true,
@@ -18,9 +22,9 @@ export const getBooks = asyncHandler(async (req: Request, res: Response) => {
 /**
  * Get book by ID
  */
-export const getBookById = asyncHandler(async (req: Request, res: Response) => {
+export const getBookById = asyncHandler(async (req: AuthRequest, res: Response) => {
     const id = req.params.id as string;
-    const book = await bookService.getBookById(id);
+    const book = await bookService.getBookById(id, req.user?._id.toString());
 
     res.json({
         success: true,

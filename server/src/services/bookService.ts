@@ -1,5 +1,6 @@
 import { ClientSession } from 'mongoose';
 import { Book } from '../models';
+import * as wishlistService from './wishlistService';
 import { AppError, formatPagination, sanitizeObject, PAGINATION } from '../utils';
 import { IBook, PaginationMeta } from '../types';
 import { SearchBooksQuery, CreateBookInput, UpdateBookInput } from '../validators/bookSchema';
@@ -12,8 +13,9 @@ interface GetBooksResult {
 /**
  * Get all books with pagination and filters
  */
-export const getBooks = async (params: SearchBooksQuery): Promise<GetBooksResult> => {
+export const getBooks = async (params: SearchBooksQuery & { userId?: string }): Promise<GetBooksResult> => {
     const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, q, category, libraryId, status } = params;
+    const { includeWishlist = false, userId } = params;
 
     const query: Record<string, unknown> = sanitizeObject({ category, libraryId, status });
 
@@ -38,6 +40,15 @@ export const getBooks = async (params: SearchBooksQuery): Promise<GetBooksResult
         Book.countDocuments(query),
     ]);
 
+    if (includeWishlist && userId) {
+        const bookIds = books.map((book) => book._id.toString());
+        const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, bookIds);
+
+        books.forEach((book) => {
+            book.isWishlisted = wishlistedBookIds.has(book._id.toString());
+        });
+    }
+
     return {
         books,
         pagination: formatPagination(page, actualLimit, total),
@@ -47,11 +58,15 @@ export const getBooks = async (params: SearchBooksQuery): Promise<GetBooksResult
 /**
  * Get book by ID
  */
-export const getBookById = async (id: string): Promise<IBook> => {
+export const getBookById = async (id: string, userId?: string): Promise<IBook> => {
     const book = await Book.findById(id).populate('libraryId', 'name code address') as IBook | null;
 
     if (!book) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+    if (userId) {
+        const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, [book._id.toString()]);
+        book.isWishlisted = wishlistedBookIds.has(book._id.toString());
     }
 
     return book;
@@ -91,6 +106,8 @@ export const deleteBook = async (id: string): Promise<IBook> => {
     if (!book) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
     }
+
+    await wishlistService.deleteByBookId(id);
 
     return book;
 };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight } from "lucide-react";
+import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { RouteGuard } from "@/components/RouteGuard";
 
@@ -47,6 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ? [
                 { href: "/dashboard/borrowings", label: "Mượn của tôi", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
+                                { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
               ]
             : []),
         ...(user?.role === "admin" || user?.role === "librarian"

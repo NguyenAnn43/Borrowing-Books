@@ -8,11 +8,10 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 function ensureDbName(uri) {
   try {
     const parsed = new URL(uri);
-    const hasDbName = parsed.pathname && parsed.pathname !== '/' && parsed.pathname.trim() !== '';
-    if (hasDbName) return uri;
-
-    parsed.pathname = '/test';
-    console.log('[seed] MONGODB_URI khong co ten DB. Tam dung test.');
+    if (!parsed.pathname || parsed.pathname === '/') {
+      parsed.pathname = '/test';
+      console.log('[seed:books] MONGODB_URI khong co ten DB. Tam dung test.');
+    }
     return parsed.toString();
   } catch {
     return uri;
@@ -20,14 +19,14 @@ function ensureDbName(uri) {
 }
 
 const libraryPayload = {
-  name: 'Thu vien Seed Wishlist',
+  name: 'Thu vien Demo Wishlist',
   code: 'WLST01',
   address: '123 Seed Street, Ho Chi Minh City',
   phone: '0900000000',
   email: 'wishlist-seed@library.local',
   status: 'active',
   workingHours: { open: '08:00', close: '17:00' },
-  description: 'Library duoc tao tu script seed wishlist',
+  description: 'Library duoc tao tu script seed books',
 };
 
 const booksPayload = [
@@ -41,7 +40,7 @@ const booksPayload = [
     description: 'Sach nen co trong wishlist cho dev.',
     language: 'en',
     pageCount: 464,
-    tags: ['wishlist-seed', 'clean-code', 'software'],
+    tags: ['seed-book', 'clean-code', 'software'],
     location: 'A1-01',
     totalCopies: 5,
     availableCopies: 5,
@@ -57,7 +56,7 @@ const booksPayload = [
     description: 'Tai ban Refactoring cho danh sach yeu thich.',
     language: 'en',
     pageCount: 448,
-    tags: ['wishlist-seed', 'refactoring'],
+    tags: ['seed-book', 'refactoring'],
     location: 'A1-02',
     totalCopies: 4,
     availableCopies: 4,
@@ -73,7 +72,7 @@ const booksPayload = [
     description: 'Goi y hay de bo vao wishlist.',
     language: 'en',
     pageCount: 352,
-    tags: ['wishlist-seed', 'pragmatic'],
+    tags: ['seed-book', 'pragmatic'],
     location: 'A1-03',
     totalCopies: 6,
     availableCopies: 6,
@@ -83,13 +82,13 @@ const booksPayload = [
     isbn: '9786041234504',
     title: 'Designing Data-Intensive Applications',
     author: 'Martin Kleppmann',
-    publisher: 'O\'Reilly Media',
+    publisher: "O'Reilly Media",
     publishYear: 2017,
     category: 'System Design',
     description: 'Sach ve he thong du lieu cho wishlist.',
     language: 'en',
     pageCount: 616,
-    tags: ['wishlist-seed', 'data', 'system-design'],
+    tags: ['seed-book', 'data', 'system-design'],
     location: 'A1-04',
     totalCopies: 3,
     availableCopies: 3,
@@ -105,7 +104,7 @@ const booksPayload = [
     description: 'Sach co ban cho wishlist hoc thuat toan.',
     language: 'en',
     pageCount: 256,
-    tags: ['wishlist-seed', 'algorithms'],
+    tags: ['seed-book', 'algorithms'],
     location: 'A1-05',
     totalCopies: 7,
     availableCopies: 7,
@@ -121,7 +120,7 @@ const booksPayload = [
     description: 'Sach phu hop de test wishlist + search.',
     language: 'en',
     pageCount: 322,
-    tags: ['wishlist-seed', 'interview', 'system-design'],
+    tags: ['seed-book', 'interview', 'system-design'],
     location: 'A1-06',
     totalCopies: 5,
     availableCopies: 5,
@@ -169,6 +168,7 @@ async function run() {
         $set: {
           ...item,
           libraryId: library._id,
+          wishlistCount: 0,
           updatedAt: new Date(),
         },
         $setOnInsert: {
@@ -181,20 +181,13 @@ async function run() {
     if (result.upsertedCount > 0) upserted += 1;
   }
 
-  const seededBooks = await books
-    .find({ tags: 'wishlist-seed' }, { projection: { _id: 1, title: 1, isbn: 1 } })
-    .sort({ title: 1 })
-    .toArray();
-
-  console.log(`[seed] Hoan tat. Upsert moi: ${upserted}. Tong sach wishlist-seed: ${seededBooks.length}`);
-  for (const b of seededBooks) {
-    console.log(`- ${b._id} | ${b.title} | ${b.isbn}`);
-  }
+  const totalBooks = await books.countDocuments({ tags: 'seed-book' });
+  console.log(`[seed:books] Hoan tat. Upsert moi: ${upserted}. Tong sach seed-book: ${totalBooks}`);
 }
 
 run()
   .catch((error) => {
-    console.error('[seed] Loi:', error.message || error);
+    console.error('[seed:books] Loi:', error.message || error);
     process.exitCode = 1;
   })
   .finally(async () => {

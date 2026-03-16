@@ -4,3 +4,4 @@ export { default as Book } from './Book';
 export { default as Borrowing } from './Borrowing';
 export { default as Reservation } from './Reservation';
 export { default as Notification } from './Notification';
+export { default as Wishlist } from './Wishlist';

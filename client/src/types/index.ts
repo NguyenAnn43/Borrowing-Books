@@ -49,9 +49,22 @@ export interface IBook {
     libraryId: ILibrary;
     totalCopies: number;
     availableCopies: number;
+    wishlistCount?: number;
+    isWishlisted?: boolean;
     status: "available" | "unavailable";
     createdAt: string;
     updatedAt: string;
+}
+
+export interface IWishlistItem {
+    _id: string;
+    bookId: string;
+    title: string;
+    author: string;
+    coverImage?: string;
+    category: string;
+    wishlistCount: number;
+    createdAt: string;
 }
 
 // Borrowing types

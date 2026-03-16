@@ -55,7 +55,18 @@ export interface IBook extends Document {
     libraryId: Types.ObjectId;
     totalCopies: number;
     availableCopies: number;
+    wishlistCount: number;
     status: 'available' | 'unavailable';
+    isWishlisted?: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+// Wishlist types
+export interface IWishlist extends Document {
+    _id: Types.ObjectId;
+    userId: Types.ObjectId;
+    bookId: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
