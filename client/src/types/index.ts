@@ -5,7 +5,7 @@ export interface IUser {
     fullName: string;
     phone?: string;
     avatar?: string;
-    role: "admin" | "librarian" | "user";
+    role: "admin" | "librarian" | "user" | "guest";
     libraryId?: ILibrary;
     status: "active" | "inactive" | "banned";
     maxBorrowLimit: number;

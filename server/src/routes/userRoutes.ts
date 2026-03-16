@@ -1,13 +1,15 @@
 import { Router, IRouter } from 'express';
 import { userController } from '../controllers';
-import { protect, authorize, authorizeOwnerOrAdmin } from '../middlewares';
+import { protect, authorize, authorizeOwnerOrAdmin, validate } from '../middlewares';
 import { ROLES } from '../utils';
 import { AuthRequest } from '../types';
+import { createStaffSchema } from '../validators';
 
 const router: IRouter = Router();
 
 // Admin only routes
 router.get('/', protect, authorize(ROLES.ADMIN), userController.getUsers);
+router.post('/staff', protect, authorize(ROLES.ADMIN), validate(createStaffSchema), userController.createStaffAccount);
 
 router.get(
     '/:id',

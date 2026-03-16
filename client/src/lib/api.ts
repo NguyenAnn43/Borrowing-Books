@@ -1,6 +1,48 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
+const SESSION_EXPIRY_KEY = "auth-session-expiry";
+
+const getAccessToken = (): string | null => {
+    if (typeof window === "undefined") return null;
+    const localToken = localStorage.getItem("accessToken");
+    const expiryRaw = localStorage.getItem(SESSION_EXPIRY_KEY);
+
+    if (localToken && expiryRaw) {
+        const expiresAt = parseInt(expiryRaw, 10);
+        if (Number.isNaN(expiresAt) || Date.now() > expiresAt) {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem(SESSION_EXPIRY_KEY);
+        }
+    }
+
+    return localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
+};
+
+const saveAccessToken = (token: string): void => {
+    if (typeof window === "undefined") return;
+
+    // Keep the same persistence strategy currently in use.
+    if (localStorage.getItem("accessToken")) {
+        localStorage.setItem("accessToken", token);
+        return;
+    }
+
+    if (sessionStorage.getItem("accessToken")) {
+        sessionStorage.setItem("accessToken", token);
+        return;
+    }
+
+    // Fallback for first login flow.
+    sessionStorage.setItem("accessToken", token);
+};
+
+const clearAccessToken = (): void => {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem(SESSION_EXPIRY_KEY);
+    sessionStorage.removeItem("accessToken");
+};
 
 // Create axios instance
 const api = axios.create({
@@ -14,12 +56,9 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
-        // Get token from localStorage
-        if (typeof window !== "undefined") {
-            const token = localStorage.getItem("accessToken");
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
+        const token = getAccessToken();
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
@@ -36,6 +75,18 @@ api.interceptors.response.use(
             _retry?: boolean;
         };
 
+        const requestUrl = originalRequest?.url || "";
+        const isAuthRequest =
+            requestUrl.includes("/auth/login") ||
+            requestUrl.includes("/auth/register") ||
+            requestUrl.includes("/auth/refresh-token");
+
+        // Do not force redirect/retry for auth endpoints.
+        // Login/Register should surface server errors to the form UI.
+        if (isAuthRequest) {
+            return Promise.reject(error);
+        }
+
         // If error is 401 and we haven't retried yet
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
@@ -49,14 +100,14 @@ api.interceptors.response.use(
                 );
 
                 const { accessToken } = response.data.data;
-                localStorage.setItem("accessToken", accessToken);
+                saveAccessToken(accessToken);
 
                 // Retry original request
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 return api(originalRequest);
             } catch (refreshError) {
                 // Refresh failed, clear storage and redirect to login
-                localStorage.removeItem("accessToken");
+                clearAccessToken();
                 if (typeof window !== "undefined") {
                     window.location.href = "/login";
                 }

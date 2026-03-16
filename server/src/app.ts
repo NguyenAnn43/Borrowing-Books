@@ -23,7 +23,23 @@ connectDB();
 // Security middlewares
 app.use(helmet());
 app.use(cors({
-    origin: config.CORS_ORIGIN,
+    origin: (origin, callback) => {
+        const allowlist = new Set([
+            config.CORS_ORIGIN,
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:3001',
+        ]);
+
+        // Allow non-browser clients (Postman, server-to-server)
+        if (!origin || allowlist.has(origin)) {
+            callback(null, true);
+            return;
+        }
+
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
 }));
 

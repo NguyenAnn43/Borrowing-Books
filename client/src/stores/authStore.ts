@@ -3,16 +3,50 @@ import { persist } from "zustand/middleware";
 import api from "@/lib/api";
 import type { IUser, ILoginRequest, IRegisterRequest, IAuthResponse } from "@/types";
 
+const REMEMBERED_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_EXPIRY_KEY = "auth-session-expiry";
+
+interface LastLoginAccount {
+    email: string;
+    fullName: string;
+    role: IUser["role"];
+}
+
+interface ApiErrorShape {
+    response?: {
+        data?: {
+            error?: {
+                message?: string;
+                details?: Array<{ field?: string; message?: string }>;
+            };
+            message?: string;
+        };
+    };
+    message?: string;
+}
+
+const extractApiErrorMessage = (error: unknown, fallback: string): string => {
+    const err = error as ApiErrorShape;
+    const detailMessage = err.response?.data?.error?.details?.[0]?.message;
+    const errorMessage = err.response?.data?.error?.message;
+    const rootMessage = err.response?.data?.message;
+
+    return detailMessage || errorMessage || rootMessage || err.message || fallback;
+};
+
 interface AuthState {
     user: IUser | null;
     isAuthenticated: boolean;
     isLoading: boolean;
     error: string | null;
+    sessionExpiresAt: number | null;
+    lastLoginAccount: LastLoginAccount | null;
 
     // Actions
-    login: (data: ILoginRequest) => Promise<void>;
+    login: (data: ILoginRequest, rememberMe?: boolean) => Promise<void>;
     register: (data: IRegisterRequest) => Promise<void>;
     logout: () => Promise<void>;
+    continueAsGuest: () => void;
     getCurrentUser: () => Promise<void>;
     clearError: () => void;
 }
@@ -24,8 +58,10 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            sessionExpiresAt: null,
+            lastLoginAccount: null,
 
-            login: async (data) => {
+            login: async (data, rememberMe = false) => {
                 set({ isLoading: true, error: null });
                 try {
                     const response = await api.post<{ success: boolean; data: IAuthResponse }>(
@@ -33,12 +69,31 @@ export const useAuthStore = create<AuthState>()(
                         data
                     );
                     const { user, accessToken } = response.data.data;
-                    localStorage.setItem("accessToken", accessToken);
-                    set({ user, isAuthenticated: true, isLoading: false });
-                } catch (error: unknown) {
-                    const err = error as { response?: { data?: { error?: { message?: string } } } };
+                    if (rememberMe) {
+                        localStorage.setItem("accessToken", accessToken);
+                        sessionStorage.removeItem("accessToken");
+                        const expiresAt = Date.now() + REMEMBERED_SESSION_MS;
+                        localStorage.setItem(SESSION_EXPIRY_KEY, String(expiresAt));
+                        set({ sessionExpiresAt: expiresAt });
+                    } else {
+                        sessionStorage.setItem("accessToken", accessToken);
+                        localStorage.removeItem("accessToken");
+                        localStorage.removeItem(SESSION_EXPIRY_KEY);
+                        set({ sessionExpiresAt: null });
+                    }
                     set({
-                        error: err.response?.data?.error?.message || "Login failed",
+                        user,
+                        isAuthenticated: true,
+                        isLoading: false,
+                        lastLoginAccount: {
+                            email: user.email,
+                            fullName: user.fullName,
+                            role: user.role,
+                        },
+                    });
+                } catch (error: unknown) {
+                    set({
+                        error: extractApiErrorMessage(error, "Login failed"),
                         isLoading: false,
                     });
                     throw error;
@@ -53,12 +108,24 @@ export const useAuthStore = create<AuthState>()(
                         data
                     );
                     const { user, accessToken } = response.data.data;
-                    localStorage.setItem("accessToken", accessToken);
-                    set({ user, isAuthenticated: true, isLoading: false });
-                } catch (error: unknown) {
-                    const err = error as { response?: { data?: { error?: { message?: string } } } };
+                    // Registration defaults to non-persistent session until user chooses remember me on login.
+                    sessionStorage.setItem("accessToken", accessToken);
+                    localStorage.removeItem("accessToken");
+                    localStorage.removeItem(SESSION_EXPIRY_KEY);
                     set({
-                        error: err.response?.data?.error?.message || "Registration failed",
+                        user,
+                        isAuthenticated: true,
+                        isLoading: false,
+                        sessionExpiresAt: null,
+                        lastLoginAccount: {
+                            email: user.email,
+                            fullName: user.fullName,
+                            role: user.role,
+                        },
+                    });
+                } catch (error: unknown) {
+                    set({
+                        error: extractApiErrorMessage(error, "Registration failed"),
                         isLoading: false,
                     });
                     throw error;
@@ -72,11 +139,61 @@ export const useAuthStore = create<AuthState>()(
                     // Ignore error
                 }
                 localStorage.removeItem("accessToken");
-                set({ user: null, isAuthenticated: false });
+                sessionStorage.removeItem("accessToken");
+                localStorage.removeItem(SESSION_EXPIRY_KEY);
+                set({
+                    user: null,
+                    isAuthenticated: false,
+                    sessionExpiresAt: null,
+                    error: null,
+                });
+            },
+
+            continueAsGuest: () => {
+                const now = new Date().toISOString();
+                localStorage.removeItem("accessToken");
+                sessionStorage.removeItem("accessToken");
+                localStorage.removeItem(SESSION_EXPIRY_KEY);
+
+                set({
+                    user: {
+                        _id: "guest",
+                        email: "guest@local",
+                        fullName: "Guest",
+                        role: "guest",
+                        status: "active",
+                        maxBorrowLimit: 0,
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                    isAuthenticated: true,
+                    isLoading: false,
+                    error: null,
+                    sessionExpiresAt: null,
+                });
             },
 
             getCurrentUser: async () => {
-                const token = localStorage.getItem("accessToken");
+                const currentUser = useAuthStore.getState().user;
+                if (currentUser?.role === "guest") {
+                    set({ isAuthenticated: true, isLoading: false });
+                    return;
+                }
+
+                const localToken = localStorage.getItem("accessToken");
+                const expiryRaw = localStorage.getItem(SESSION_EXPIRY_KEY);
+                if (localToken && expiryRaw) {
+                    const expiresAt = parseInt(expiryRaw, 10);
+                    if (Number.isNaN(expiresAt) || Date.now() > expiresAt) {
+                        localStorage.removeItem("accessToken");
+                        localStorage.removeItem(SESSION_EXPIRY_KEY);
+                        set({ sessionExpiresAt: null });
+                    } else {
+                        set({ sessionExpiresAt: expiresAt });
+                    }
+                }
+
+                const token = localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
                 if (!token) {
                     set({ isAuthenticated: false, user: null });
                     return;
@@ -88,6 +205,8 @@ export const useAuthStore = create<AuthState>()(
                     set({ user: response.data.data, isAuthenticated: true, isLoading: false });
                 } catch {
                     localStorage.removeItem("accessToken");
+                    sessionStorage.removeItem("accessToken");
+                    localStorage.removeItem(SESSION_EXPIRY_KEY);
                     set({ user: null, isAuthenticated: false, isLoading: false });
                 }
             },
@@ -99,6 +218,8 @@ export const useAuthStore = create<AuthState>()(
             partialize: (state) => ({
                 user: state.user,
                 isAuthenticated: state.isAuthenticated,
+                lastLoginAccount: state.lastLoginAccount,
+                sessionExpiresAt: state.sessionExpiresAt,
             }),
         }
     )
