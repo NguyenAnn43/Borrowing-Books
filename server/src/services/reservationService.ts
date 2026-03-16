@@ -1,6 +1,7 @@
-import { Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { Reservation, Book, Borrowing } from '../models';
 import * as notificationService from './notificationService';
+import * as bookService from './bookService';
 import {
     AppError, formatPagination, generateDueDate,
     RESERVATION_STATUS, RESERVATION_SETTINGS, BORROWING_STATUS,
@@ -180,37 +181,54 @@ export const cancelReservation = async (id: string, userId: string): Promise<IRe
  * Creates a Borrowing record and links it back via borrowingId.
  */
 export const fulfillReservation = async (id: string): Promise<IReservation> => {
-    const reservation = await Reservation.findById(id) as IReservation | null;
-    if (!reservation) throw new AppError('Reservation not found', 404, 'RESERVATION_NOT_FOUND');
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (reservation.status !== RESERVATION_STATUS.READY) {
-        throw new AppError('Only ready reservations can be fulfilled', 400, 'INVALID_STATUS');
+    try {
+        const reservation = await Reservation.findById(id).session(session) as IReservation | null;
+        if (!reservation) throw new AppError('Reservation not found', 404, 'RESERVATION_NOT_FOUND');
+
+        if (reservation.status !== RESERVATION_STATUS.READY) {
+            throw new AppError('Only ready reservations can be fulfilled', 400, 'INVALID_STATUS');
+        }
+
+        // Decrement stock atomically before creating the borrowing.
+        await bookService.decrementAvailabilityAtomic(toId(reservation.bookId), session);
+
+        const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
+        const borrowingDocs = await Borrowing.create([{
+            userId: reservation.userId,
+            bookId: reservation.bookId,
+            libraryId: reservation.libraryId,
+            dueDate,
+            status: BORROWING_STATUS.BORROWED,
+            borrowDate: new Date(),
+        }], { session }) as IBorrowing[];
+        const borrowing = borrowingDocs[0];
+        if (!borrowing) {
+            throw new AppError('Failed to create borrowing', 500, 'BORROWING_CREATE_FAILED');
+        }
+
+        reservation.status = RESERVATION_STATUS.COMPLETED;
+        reservation.borrowingId = borrowing._id;
+        await reservation.save({ session });
+
+        await session.commitTransaction();
+
+        await notificationService.create({
+            userId: toId(reservation.userId),
+            title: 'Reservation Fulfilled',
+            message: `Your reservation has been fulfilled. Due date: ${dueDate.toLocaleDateString('vi-VN')}`,
+            type: NOTIFICATION_TYPE.RESERVATION,
+        });
+
+        return reservation;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
     }
-
-    // Create a Borrowing from this reservation
-    const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
-    const borrowing = await Borrowing.create({
-        userId: reservation.userId,
-        bookId: reservation.bookId,
-        libraryId: reservation.libraryId,
-        dueDate,
-        status: BORROWING_STATUS.BORROWED,
-        borrowDate: new Date(),
-    }) as IBorrowing;
-
-    // Link borrowingId for end-to-end traceability
-    reservation.status = RESERVATION_STATUS.COMPLETED;
-    reservation.borrowingId = borrowing._id;
-    await reservation.save();
-
-    await notificationService.create({
-        userId: toId(reservation.userId),
-        title: 'Reservation Fulfilled',
-        message: `Your reservation has been fulfilled. Due date: ${dueDate.toLocaleDateString('vi-VN')}`,
-        type: NOTIFICATION_TYPE.RESERVATION,
-    });
-
-    return reservation;
 };
 
 /**

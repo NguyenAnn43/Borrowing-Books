@@ -12,6 +12,12 @@ const {
     mockReservationSave,
     mockBookFindById,
     mockBorrowingCreate,
+    mockDecrementAvailabilityAtomic,
+    mockStartSession,
+    mockSessionStartTransaction,
+    mockSessionCommitTransaction,
+    mockSessionAbortTransaction,
+    mockSessionEndSession,
 } = vi.hoisted(() => ({
     mockReservationFindById: vi.fn(),
     mockReservationFindOne: vi.fn(),
@@ -22,7 +28,25 @@ const {
     mockReservationSave: vi.fn(),
     mockBookFindById: vi.fn(),
     mockBorrowingCreate: vi.fn(),
+    mockDecrementAvailabilityAtomic: vi.fn(),
+    mockStartSession: vi.fn(),
+    mockSessionStartTransaction: vi.fn(),
+    mockSessionCommitTransaction: vi.fn().mockResolvedValue(undefined),
+    mockSessionAbortTransaction: vi.fn().mockResolvedValue(undefined),
+    mockSessionEndSession: vi.fn(),
 }));
+
+vi.mock('mongoose', async () => {
+    const actual = await vi.importActual<typeof import('mongoose')>('mongoose');
+    return {
+        ...actual,
+        default: {
+            ...actual.default,
+            startSession: mockStartSession,
+        },
+        startSession: mockStartSession,
+    };
+});
 
 vi.mock('../models', () => ({
     Reservation: {
@@ -43,6 +67,10 @@ vi.mock('../models', () => ({
 
 vi.mock('./notificationService', () => ({
     create: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock('./bookService', () => ({
+    decrementAvailabilityAtomic: mockDecrementAvailabilityAtomic,
 }));
 
 import * as reservationService from './reservationService';
@@ -75,7 +103,15 @@ const makeReservation = (overrides = {}): Partial<IReservation> & { save: Return
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('reservationService.createReservation', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStartSession.mockResolvedValue({
+            startTransaction: mockSessionStartTransaction,
+            commitTransaction: mockSessionCommitTransaction,
+            abortTransaction: mockSessionAbortTransaction,
+            endSession: mockSessionEndSession,
+        });
+    });
 
     it('creates a PENDING reservation without expiryDate', async () => {
         const libraryId = new Types.ObjectId();
@@ -124,7 +160,15 @@ describe('reservationService.createReservation', () => {
 });
 
 describe('reservationService.markReady', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStartSession.mockResolvedValue({
+            startTransaction: mockSessionStartTransaction,
+            commitTransaction: mockSessionCommitTransaction,
+            abortTransaction: mockSessionAbortTransaction,
+            endSession: mockSessionEndSession,
+        });
+    });
 
     it('transitions PENDING → READY and sets expiryDate', async () => {
         const now = new Date();
@@ -149,7 +193,15 @@ describe('reservationService.markReady', () => {
 });
 
 describe('reservationService.cancelReservation', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStartSession.mockResolvedValue({
+            startTransaction: mockSessionStartTransaction,
+            commitTransaction: mockSessionCommitTransaction,
+            abortTransaction: mockSessionAbortTransaction,
+            endSession: mockSessionEndSession,
+        });
+    });
 
     it('cancels a PENDING reservation by owner', async () => {
         const userId = new Types.ObjectId();
@@ -182,34 +234,58 @@ describe('reservationService.cancelReservation', () => {
 });
 
 describe('reservationService.fulfillReservation', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStartSession.mockResolvedValue({
+            startTransaction: mockSessionStartTransaction,
+            commitTransaction: mockSessionCommitTransaction,
+            abortTransaction: mockSessionAbortTransaction,
+            endSession: mockSessionEndSession,
+        });
+    });
 
     it('creates a Borrowing and links borrowingId back to reservation', async () => {
         const reservation = makeReservation({ status: RESERVATION_STATUS.READY });
         const borrowingId = new Types.ObjectId();
         const borrowing = { _id: borrowingId };
 
-        mockReservationFindById.mockResolvedValue(reservation);
-        mockBorrowingCreate.mockResolvedValue(borrowing);
+        mockReservationFindById.mockReturnValue({
+            session: vi.fn().mockResolvedValue(reservation),
+        });
+        mockDecrementAvailabilityAtomic.mockResolvedValue({});
+        mockBorrowingCreate.mockResolvedValue([borrowing]);
         mockReservationSave.mockResolvedValue(reservation);
 
         await reservationService.fulfillReservation(reservation._id!.toString());
 
         expect(reservation.status).toBe(RESERVATION_STATUS.COMPLETED);
         expect(reservation.borrowingId?.toString()).toBe(borrowingId.toString());
+        expect(mockDecrementAvailabilityAtomic).toHaveBeenCalledTimes(1);
+        expect(mockSessionCommitTransaction).toHaveBeenCalledTimes(1);
     });
 
     it('throws INVALID_STATUS when not READY', async () => {
         const reservation = makeReservation({ status: RESERVATION_STATUS.PENDING });
-        mockReservationFindById.mockResolvedValue(reservation);
+        mockReservationFindById.mockReturnValue({
+            session: vi.fn().mockResolvedValue(reservation),
+        });
 
         await expect(reservationService.fulfillReservation(reservation._id!.toString()))
             .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATUS' });
+        expect(mockSessionAbortTransaction).toHaveBeenCalledTimes(1);
     });
 });
 
 describe('reservationService.expireReservations', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStartSession.mockResolvedValue({
+            startTransaction: mockSessionStartTransaction,
+            commitTransaction: mockSessionCommitTransaction,
+            abortTransaction: mockSessionAbortTransaction,
+            endSession: mockSessionEndSession,
+        });
+    });
 
     it('bulk-updates expired READY reservations and returns count', async () => {
         mockReservationUpdateMany.mockResolvedValue({ modifiedCount: 3 });

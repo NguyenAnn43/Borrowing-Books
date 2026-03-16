@@ -3,6 +3,7 @@ import { Book } from '../models';
 import { AppError, formatPagination, sanitizeObject, PAGINATION } from '../utils';
 import { IBook, PaginationMeta } from '../types';
 import { SearchBooksQuery, CreateBookInput, UpdateBookInput } from '../validators/bookSchema';
+import { BOOK_STATUS } from '../utils/constants';
 
 interface GetBooksResult {
     books: IBook[];
@@ -106,7 +107,24 @@ export const decrementAvailabilityAtomic = async (
 ): Promise<IBook> => {
     const book = await Book.findOneAndUpdate(
         { _id: id, availableCopies: { $gt: 0 } },
-        { $inc: { availableCopies: -1 } },
+        [
+            {
+                $set: {
+                    availableCopies: { $subtract: ['$availableCopies', 1] },
+                },
+            },
+            {
+                $set: {
+                    status: {
+                        $cond: [
+                            { $eq: ['$availableCopies', 0] },
+                            BOOK_STATUS.UNAVAILABLE,
+                            BOOK_STATUS.AVAILABLE,
+                        ],
+                    },
+                },
+            },
+        ],
         { new: true, session }
     ) as IBook | null;
 
@@ -125,9 +143,28 @@ export const incrementAvailabilityAtomic = async (
     id: string,
     session?: ClientSession
 ): Promise<IBook> => {
-    const book = await Book.findByIdAndUpdate(
-        id,
-        { $inc: { availableCopies: 1 } },
+    const book = await Book.findOneAndUpdate(
+        { _id: id },
+        [
+            {
+                $set: {
+                    availableCopies: {
+                        $min: [{ $add: ['$availableCopies', 1] }, '$totalCopies'],
+                    },
+                },
+            },
+            {
+                $set: {
+                    status: {
+                        $cond: [
+                            { $eq: ['$availableCopies', 0] },
+                            BOOK_STATUS.UNAVAILABLE,
+                            BOOK_STATUS.AVAILABLE,
+                        ],
+                    },
+                },
+            },
+        ],
         { new: true, session }
     ) as IBook | null;
 
