@@ -8,6 +8,7 @@ export interface GetBooksParams {
     category?: string;
     libraryId?: string;
     status?: "available" | "unavailable";
+    includeWishlist?: boolean;
 }
 
 export interface GetBooksResponse {

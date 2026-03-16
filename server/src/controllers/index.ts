@@ -5,3 +5,4 @@ export * as libraryController from './libraryController';
 export * as userController from './userController';
 export * as reservationController from './reservationController';
 export * as notificationController from './notificationController';
+export * as wishlistController from './wishlistController';

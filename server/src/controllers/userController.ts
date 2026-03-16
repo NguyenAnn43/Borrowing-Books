@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { User } from '../models';
 import { asyncHandler, AppError, formatPagination, ROLES } from '../utils';
 import { IUser } from '../types';
+import { CreateStaffInput } from '../validators/userSchema';
 
 /**
  * Get all users
@@ -51,7 +52,9 @@ export const getUserById = asyncHandler(async (req: Request, res: Response) => {
  */
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
     // Prevent updating sensitive fields
-    const { password, role, ...updateData } = req.body;
+    const updateData: Record<string, unknown> = { ...req.body };
+    delete updateData.password;
+    delete updateData.role;
 
     const user = await User.findByIdAndUpdate(
         req.params.id,
@@ -129,5 +132,39 @@ export const updateUserRole = asyncHandler(async (req: Request, res: Response) =
         success: true,
         data: user,
         message: 'User role updated successfully',
+    });
+});
+
+/**
+ * Create staff account (admin/librarian) - admin only
+ */
+export const createStaffAccount = asyncHandler(async (req: Request, res: Response) => {
+    const { email, password, fullName, phone, role, libraryId } = req.body as CreateStaffInput;
+
+    if (role === ROLES.LIBRARIAN && !libraryId) {
+        throw new AppError('Library ID is required for librarian role', 400, 'LIBRARY_REQUIRED');
+    }
+
+    const exists = await User.findOne({ email }) as IUser | null;
+    if (exists) {
+        throw new AppError('Email already registered', 400, 'EMAIL_EXISTS');
+    }
+
+    const created = await User.create({
+        email,
+        password,
+        fullName,
+        phone,
+        role,
+        libraryId: role === ROLES.LIBRARIAN ? libraryId : null,
+        status: 'active',
+    }) as IUser;
+
+    const user = await User.findById(created._id).populate('libraryId', 'name code') as IUser | null;
+
+    res.status(201).json({
+        success: true,
+        data: user,
+        message: `${role} account created successfully`,
     });
 });

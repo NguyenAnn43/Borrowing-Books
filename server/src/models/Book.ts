@@ -64,6 +64,11 @@ const bookSchema = new Schema<IBook>(
             required: [true, 'Available copies is required'],
             min: [0, 'Available copies cannot be negative'],
         },
+        wishlistCount: {
+            type: Number,
+            default: 0,
+            min: [0, 'Wishlist count cannot be negative'],
+        },
         status: {
             type: String,
             enum: Object.values(BOOK_STATUS),

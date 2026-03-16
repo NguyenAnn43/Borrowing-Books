@@ -1,5 +1,19 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import fs from 'fs';
+import path from 'path';
+
+const envCandidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'server/.env'),
+    path.resolve(__dirname, '../../.env'),
+];
+
+for (const envPath of envCandidates) {
+    if (fs.existsSync(envPath)) {
+        dotenv.config({ path: envPath, override: true });
+        break;
+    }
+}
 
 interface Config {
     NODE_ENV: string;
@@ -21,9 +35,12 @@ interface Config {
 }
 
 const config: Config = {
+    // If project env is not loaded, avoid using stray global PORT values in development.
+    // This prevents accidental binding to 5000 and keeps local client/server aligned.
+    
     // App
     NODE_ENV: process.env.NODE_ENV || 'development',
-    PORT: parseInt(process.env.PORT || '5000', 10),
+    PORT: parseInt((process.env.MONGODB_URI ? process.env.PORT : undefined) || '5001', 10),
 
     // MongoDB
     MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/borrowing_books',

@@ -49,6 +49,10 @@ export const searchBooksSchema = {
         category: z.string().optional(),
         libraryId: z.string().optional(),
         status: z.enum(['available', 'unavailable']).optional(),
+        includeWishlist: z
+            .string()
+            .optional()
+            .transform((value) => value === 'true'),
         page: z.string().transform(Number).default('1'),
         limit: z.string().transform(Number).default('10'),
     }),

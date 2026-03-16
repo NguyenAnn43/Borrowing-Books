@@ -1,14 +1,14 @@
 import { Router, IRouter } from 'express';
 import { bookController } from '../controllers';
-import { protect, authorize, validate } from '../middlewares';
+import { protect, authorize, validate, optionalAuth } from '../middlewares';
 import { createBookSchema, updateBookSchema, searchBooksSchema, getBookByIdSchema } from '../validators';
 import { ROLES } from '../utils';
 
 const router: IRouter = Router();
 
 // Public routes
-router.get('/', validate(searchBooksSchema), bookController.getBooks);
-router.get('/:id', validate(getBookByIdSchema), bookController.getBookById);
+router.get('/', optionalAuth, validate(searchBooksSchema), bookController.getBooks);
+router.get('/:id', optionalAuth, validate(getBookByIdSchema), bookController.getBookById);
 
 // Protected routes (Librarian/Admin)
 router.post(

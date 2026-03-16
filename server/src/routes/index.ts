@@ -7,6 +7,7 @@ import bookRoutes from './bookRoutes';
 import borrowingRoutes from './borrowingRoutes';
 import reservationRoutes from './reservationRoutes';
 import notificationRoutes from './notificationRoutes';
+import wishlistRoutes from './wishlistRoutes';
 
 const router: IRouter = Router();
 
@@ -18,6 +19,7 @@ router.use('/books', bookRoutes);
 router.use('/borrowings', borrowingRoutes);
 router.use('/reservations', reservationRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/wishlists', wishlistRoutes);
 
 // Health check
 router.get('/health', (req: Request, res: Response) => {
