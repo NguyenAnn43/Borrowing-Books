@@ -96,6 +96,7 @@ const FOOTER_SOCIAL_LINKS = [
 export default function HomePage() {
   const [books, setBooks] = useState<IBook[]>([]);
   const [allBooks, setAllBooks] = useState<IBook[]>([]);
+  const [libraryPresenceByBookId, setLibraryPresenceByBookId] = useState<Record<string, number>>({});
   const [searchText, setSearchText] = useState("");
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -138,6 +139,24 @@ export default function HomePage() {
         }),
       ]);
 
+      const libraryCountEntries = await Promise.all(
+        featuredBooks.map(async (book) => {
+          try {
+            const alternatives = await bookService.getBookAlternatives(book._id);
+
+            const libraryIds = new Set<string>([
+              book.libraryId?._id,
+              ...alternatives.alternatives.map((item) => item.libraryId?._id),
+            ].filter((value): value is string => Boolean(value)));
+
+            const fallbackCount = alternatives.alternatives.length + 1;
+            return [book._id, Math.max(libraryIds.size, fallbackCount)] as const;
+          } catch {
+            return [book._id, 1] as const;
+          }
+        })
+      );
+
       setBooks(featuredBooks);
       setAllBooks(categorySourceBooks);
       setWishlistedBookIds(
@@ -146,11 +165,13 @@ export default function HomePage() {
           return acc;
         }, {})
       );
+      setLibraryPresenceByBookId(Object.fromEntries(libraryCountEntries));
     } catch {
       setError("Không tải được dữ liệu sách. Vui lòng thử lại.");
       setBooks([]);
       setAllBooks([]);
       setWishlistedBookIds({});
+      setLibraryPresenceByBookId({});
     } finally {
       setIsLoadingBooks(false);
       setIsLoadingCategories(false);
@@ -513,6 +534,11 @@ export default function HomePage() {
                           <p className="truncate text-sm font-medium leading-normal text-[#616f89] dark:text-gray-400">
                             {book.author}
                           </p>
+                          <p className="mt-1 line-clamp-1 text-xs font-medium text-[#2b6cee] dark:text-blue-400" title={book.libraryId?.name || "Không xác định thư viện"}>
+                            📚 {book.libraryId?.name || "Không xác định thư viện"}
+                            {book.libraryId?.code ? ` (${book.libraryId.code})` : ""}
+                          </p>
+                          <div className="mt-2 flex items-center gap-1">
                           <div className="mt-2 flex items-center justify-between gap-2">
                             <span
                               className={`text-xs font-semibold px-2 py-1 rounded-full ${
@@ -540,6 +566,11 @@ export default function HomePage() {
                                   ? "♥"
                                   : "♡"}
                             </button>
+                            <span className="text-xs font-semibold rounded-full bg-blue-100 px-2 py-1 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                              {libraryPresenceByBookId[book._id] && libraryPresenceByBookId[book._id] > 1
+                                ? `Có ở ${libraryPresenceByBookId[book._id]} thư viện`
+                                : "1 thư viện"}
+                            </span>
                           </div>
                         </div>
                       </Link>

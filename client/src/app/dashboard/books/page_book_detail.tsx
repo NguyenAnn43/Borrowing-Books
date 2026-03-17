@@ -9,6 +9,7 @@ const FALLBACK_COVER =
 interface BookDetailViewProps {
   book: IBook | null;
   recommendations: IBook[];
+  recommendationType?: "alternatives" | "related";
   loading: boolean;
   error: string;
 }
@@ -30,7 +31,7 @@ function BookCard({ book }: { book: IBook }) {
   );
 }
 
-export default function BookDetailView({ book, recommendations, loading, error }: BookDetailViewProps) {
+export default function BookDetailView({ book, recommendations, recommendationType = "related", loading, error }: BookDetailViewProps) {
   if (loading) {
     return (
       <main className="mx-auto w-full max-w-[1200px] px-6 py-10">
@@ -123,7 +124,14 @@ export default function BookDetailView({ book, recommendations, loading, error }
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-5 text-xl font-bold text-[#111318] dark:text-white">Readers also enjoyed</h2>
+        <h2 className="mb-1 text-xl font-bold text-[#111318] dark:text-white">
+          {recommendationType === "alternatives" ? "Có ở thư viện khác" : "Readers also enjoyed"}
+        </h2>
+        <p className="mb-5 text-sm text-gray-500 dark:text-gray-400">
+          {recommendationType === "alternatives"
+            ? "Các thư viện khác hiện có cùng đầu sách này để bạn chọn nơi mượn phù hợp."
+            : "Một vài gợi ý cùng thể loại nếu hiện chưa có bản sao ở thư viện khác."}
+        </p>
         {recommendations.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">Chưa có gợi ý phù hợp.</p>
         ) : (

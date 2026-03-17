@@ -8,6 +8,7 @@ const router: IRouter = Router();
 
 // Public routes
 router.get('/', optionalAuth, validate(searchBooksSchema), bookController.getBooks);
+router.get('/:id/alternatives', optionalAuth, validate(getBookByIdSchema), bookController.getBookAlternatives);
 router.get('/:id', optionalAuth, validate(getBookByIdSchema), bookController.getBookById);
 
 // Protected routes (Librarian only)

@@ -11,6 +11,12 @@ interface GetBooksResult {
     pagination: PaginationMeta;
 }
 
+interface GetBookAlternativesResult {
+    sourceBook: IBook;
+    alternatives: IBook[];
+    matchedBy: 'isbn' | 'title-author';
+}
+
 /**
  * Get all books with pagination and filters
  */
@@ -71,6 +77,51 @@ export const getBookById = async (id: string, userId?: string): Promise<IBook> =
     }
 
     return book;
+};
+
+/**
+ * Get alternative copies of the same title in other libraries.
+ * Priority matching by normalized ISBN. Fallback to title+author if ISBN absent.
+ */
+export const getBookAlternatives = async (id: string, userId?: string): Promise<GetBookAlternativesResult> => {
+    const sourceBook = await Book.findById(id).populate('libraryId', 'name code address') as IBook | null;
+
+    if (!sourceBook) {
+        throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    const matchedBy: 'isbn' | 'title-author' = sourceBook.isbnNormalized ? 'isbn' : 'title-author';
+
+    const alternativeQuery: Record<string, unknown> = {
+        _id: { $ne: sourceBook._id },
+        libraryId: { $ne: sourceBook.libraryId },
+    };
+
+    if (matchedBy === 'isbn') {
+        alternativeQuery.isbnNormalized = sourceBook.isbnNormalized;
+    } else {
+        alternativeQuery.title = sourceBook.title;
+        alternativeQuery.author = sourceBook.author;
+    }
+
+    const alternatives = await Book.find(alternativeQuery)
+        .populate('libraryId', 'name code address')
+        .sort({ availableCopies: -1, createdAt: -1 }) as IBook[];
+
+    if (userId && alternatives.length > 0) {
+        const alternativeIds = alternatives.map((book) => book._id.toString());
+        const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, alternativeIds);
+
+        alternatives.forEach((book) => {
+            book.isWishlisted = wishlistedBookIds.has(book._id.toString());
+        });
+    }
+
+    return {
+        sourceBook,
+        alternatives,
+        matchedBy,
+    };
 };
 
 /**

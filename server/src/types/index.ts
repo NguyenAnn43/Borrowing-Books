@@ -41,6 +41,7 @@ export interface ILibrary extends Document {
 export interface IBook extends Document {
     _id: Types.ObjectId;
     isbn?: string;
+    isbnNormalized?: string;
     title: string;
     author: string;
     publisher?: string;

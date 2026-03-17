@@ -12,6 +12,7 @@ export default function BookDetailPage() {
 
   const [book, setBook] = useState<IBook | null>(null);
   const [recommendations, setRecommendations] = useState<IBook[]>([]);
+  const [recommendationType, setRecommendationType] = useState<"alternatives" | "related">("related");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -30,17 +31,26 @@ export default function BookDetailPage() {
         const selectedBook = await bookService.getBookById(bookId);
         setBook(selectedBook);
 
-        const related = await bookService.getBooks({
-          page: 1,
-          limit: 6,
-          category: selectedBook.category || undefined,
-          status: "available",
-        });
+        const alternatives = await bookService.getBookAlternatives(bookId);
 
-        setRecommendations(related.books.filter((item) => item._id !== selectedBook._id).slice(0, 5));
+        if (alternatives.alternatives.length > 0) {
+          setRecommendationType("alternatives");
+          setRecommendations(alternatives.alternatives.slice(0, 5));
+        } else {
+          setRecommendationType("related");
+          const related = await bookService.getBooks({
+            page: 1,
+            limit: 6,
+            category: selectedBook.category || undefined,
+            status: "available",
+          });
+
+          setRecommendations(related.books.filter((item) => item._id !== selectedBook._id).slice(0, 5));
+        }
       } catch {
         setError("Không thể tải chi tiết sách. Vui lòng thử lại.");
         setBook(null);
+        setRecommendationType("related");
         setRecommendations([]);
       } finally {
         setLoading(false);
@@ -50,5 +60,5 @@ export default function BookDetailPage() {
     void fetchBookDetail();
   }, [bookId]);
 
-  return <BookDetailView book={book} recommendations={recommendations} loading={loading} error={error} />;
+  return <BookDetailView book={book} recommendations={recommendations} recommendationType={recommendationType} loading={loading} error={error} />;
 }

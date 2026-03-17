@@ -16,6 +16,12 @@ export interface GetBooksResponse {
     pagination: IPagination;
 }
 
+export interface GetBookAlternativesResponse {
+    sourceBook: IBook;
+    alternatives: IBook[];
+    matchedBy: "isbn" | "title-author";
+}
+
 export const bookService = {
     /**
      * Get all books with filters
@@ -33,6 +39,14 @@ export const bookService = {
      */
     getBookById: async (id: string): Promise<IBook> => {
         const response = await api.get<ApiResponse<IBook>>(`/books/${id}`);
+        return response.data.data;
+    },
+
+    /**
+     * Get alternative libraries carrying the same title
+     */
+    getBookAlternatives: async (id: string): Promise<GetBookAlternativesResponse> => {
+        const response = await api.get<ApiResponse<GetBookAlternativesResponse>>(`/books/${id}/alternatives`);
         return response.data.data;
     },
 
