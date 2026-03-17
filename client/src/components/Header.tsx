@@ -3,6 +3,8 @@
 import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
+import { ShoppingCart } from "lucide-react";
 
 interface HeaderProps {
   searchText: string;
@@ -27,6 +29,7 @@ export function Header({
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const { user, isAuthenticated, logout } = useAuthStore();
+  const cartItems = useCartStore((state) => state.items);
   const isSignedIn = isAuthenticated && Boolean(user) && user?.role !== "guest";
 
   const dashboardHref = user?.role === "admin"
@@ -82,50 +85,61 @@ export function Header({
         )}
 
         {isSignedIn ? (
-          <div className="relative" ref={accountMenuRef}>
-            <button
-              type="button"
-              onClick={() => setIsAccountMenuOpen((prev) => !prev)}
-              className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-[#111318] transition-all duration-300 hover:border-[#2b6cee] hover:text-[#2b6cee] dark:border-gray-700 dark:bg-[#101622] dark:text-gray-200"
-            >
-              <span className="flex size-7 items-center justify-center rounded-full bg-[#2b6cee] text-xs font-bold text-white">
-                {user?.fullName?.charAt(0).toUpperCase() ?? "U"}
-              </span>
-              <span className="hidden sm:inline">Tài khoản</span>
-              <span className="material-symbols-outlined text-base">expand_more</span>
-            </button>
+          <>
+            <Link href="/dashboard/cart" className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#111318] transition-all duration-300 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800">
+              <ShoppingCart className="h-5 w-5" />
+              {cartItems.length > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {cartItems.length}
+                </span>
+              )}
+            </Link>
 
-            {isAccountMenuOpen ? (
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-gray-700 dark:bg-[#0f172a]">
-                <Link
-                  href={dashboardHref}
-                  onClick={() => setIsAccountMenuOpen(false)}
-                  className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
-                >
-                  Vào Dashboard
-                </Link>
-                {(user?.role === "admin" || user?.role === "librarian") ? (
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-[#111318] transition-all duration-300 hover:border-[#2b6cee] hover:text-[#2b6cee] dark:border-gray-700 dark:bg-[#101622] dark:text-gray-200"
+              >
+                <span className="flex size-7 items-center justify-center rounded-full bg-[#2b6cee] text-xs font-bold text-white">
+                  {user?.fullName?.charAt(0).toUpperCase() ?? "U"}
+                </span>
+                <span className="hidden sm:inline">Tài khoản</span>
+                <span className="material-symbols-outlined text-base">expand_more</span>
+              </button>
+
+              {isAccountMenuOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-gray-700 dark:bg-[#0f172a]">
                   <Link
-                    href="/dashboard/admin"
+                    href={dashboardHref}
                     onClick={() => setIsAccountMenuOpen(false)}
                     className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
                   >
-                    Quản trị
+                    Vào Dashboard
                   </Link>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await logout();
-                    setIsAccountMenuOpen(false);
-                  }}
-                  className="mt-1 flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                >
-                  Đăng xuất
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  {(user?.role === "admin" || user?.role === "librarian") ? (
+                    <Link
+                      href={dashboardHref}
+                      onClick={() => setIsAccountMenuOpen(false)}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                      Quản trị
+                    </Link>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await logout();
+                      setIsAccountMenuOpen(false);
+                    }}
+                    className="mt-1 flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                  >
+                    Đăng xuất
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </>
         ) : (
           <>
             <Link href="/login" className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#2b6cee] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:bg-blue-700 hover:shadow-lg active:scale-95 dark:hover:bg-blue-600">
