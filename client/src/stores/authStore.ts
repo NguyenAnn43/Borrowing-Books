@@ -5,6 +5,7 @@ import type { IUser, ILoginRequest, IRegisterRequest, IAuthResponse } from "@/ty
 
 const REMEMBERED_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_EXPIRY_KEY = "auth-session-expiry";
+let getCurrentUserInFlight: Promise<void> | null = null;
 
 interface LastLoginAccount {
     email: string;
@@ -14,6 +15,7 @@ interface LastLoginAccount {
 
 interface ApiErrorShape {
     response?: {
+        status?: number;
         data?: {
             error?: {
                 message?: string;
@@ -174,40 +176,59 @@ export const useAuthStore = create<AuthState>()(
             },
 
             getCurrentUser: async () => {
-                const currentUser = useAuthStore.getState().user;
-                if (currentUser?.role === "guest") {
-                    set({ isAuthenticated: true, isLoading: false });
-                    return;
+                if (getCurrentUserInFlight) {
+                    return getCurrentUserInFlight;
                 }
 
-                const localToken = localStorage.getItem("accessToken");
-                const expiryRaw = localStorage.getItem(SESSION_EXPIRY_KEY);
-                if (localToken && expiryRaw) {
-                    const expiresAt = parseInt(expiryRaw, 10);
-                    if (Number.isNaN(expiresAt) || Date.now() > expiresAt) {
-                        localStorage.removeItem("accessToken");
-                        localStorage.removeItem(SESSION_EXPIRY_KEY);
-                        set({ sessionExpiresAt: null });
-                    } else {
-                        set({ sessionExpiresAt: expiresAt });
+                getCurrentUserInFlight = (async () => {
+                    const currentUser = useAuthStore.getState().user;
+                    if (currentUser?.role === "guest") {
+                        set({ isAuthenticated: true, isLoading: false });
+                        return;
                     }
-                }
 
-                const token = localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
-                if (!token) {
-                    set({ isAuthenticated: false, user: null });
-                    return;
-                }
+                    const localToken = localStorage.getItem("accessToken");
+                    const expiryRaw = localStorage.getItem(SESSION_EXPIRY_KEY);
+                    if (localToken && expiryRaw) {
+                        const expiresAt = parseInt(expiryRaw, 10);
+                        if (Number.isNaN(expiresAt) || Date.now() > expiresAt) {
+                            localStorage.removeItem("accessToken");
+                            localStorage.removeItem(SESSION_EXPIRY_KEY);
+                            set({ sessionExpiresAt: null });
+                        } else {
+                            set({ sessionExpiresAt: expiresAt });
+                        }
+                    }
 
-                set({ isLoading: true });
+                    const token = localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
+                    if (!token) {
+                        set({ isAuthenticated: false, user: null, isLoading: false });
+                        return;
+                    }
+
+                    set({ isLoading: true });
+                    try {
+                        const response = await api.get<{ success: boolean; data: IUser }>("/auth/me");
+                        set({ user: response.data.data, isAuthenticated: true, isLoading: false });
+                    } catch (error) {
+                        const status = (error as ApiErrorShape)?.response?.status;
+
+                        if (status === 401 || status === 403) {
+                            localStorage.removeItem("accessToken");
+                            sessionStorage.removeItem("accessToken");
+                            localStorage.removeItem(SESSION_EXPIRY_KEY);
+                            set({ user: null, isAuthenticated: false, isLoading: false });
+                            return;
+                        }
+
+                        set({ isLoading: false });
+                    }
+                })();
+
                 try {
-                    const response = await api.get<{ success: boolean; data: IUser }>("/auth/me");
-                    set({ user: response.data.data, isAuthenticated: true, isLoading: false });
-                } catch {
-                    localStorage.removeItem("accessToken");
-                    sessionStorage.removeItem("accessToken");
-                    localStorage.removeItem(SESSION_EXPIRY_KEY);
-                    set({ user: null, isAuthenticated: false, isLoading: false });
+                    await getCurrentUserInFlight;
+                } finally {
+                    getCurrentUserInFlight = null;
                 }
             },
 

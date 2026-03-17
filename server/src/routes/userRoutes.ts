@@ -4,6 +4,7 @@ import { protect, authorize, authorizeOwnerOrAdmin, validate } from '../middlewa
 import { ROLES } from '../utils';
 import { AuthRequest } from '../types';
 import { createStaffSchema } from '../validators';
+import { uploadAvatar } from '../middlewares/upload';
 
 const router: IRouter = Router();
 
@@ -23,6 +24,14 @@ router.put(
     protect,
     authorizeOwnerOrAdmin((req: AuthRequest) => req.params.id),
     userController.updateUser
+);
+
+router.put(
+    '/:id/avatar',
+    protect,
+    authorizeOwnerOrAdmin((req: AuthRequest) => req.params.id),
+    uploadAvatar.single('avatar'),
+    userController.updateAvatar
 );
 
 router.delete('/:id', protect, authorize(ROLES.ADMIN), userController.deleteUser);

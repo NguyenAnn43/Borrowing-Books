@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 
 import config from './config/env';
 import connectDB from './config/database';
@@ -21,7 +22,9 @@ const app: Application = express();
 connectDB();
 
 // Security middlewares
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 app.use(cors({
     origin: (origin, callback) => {
         const allowlist = new Set([
@@ -70,6 +73,9 @@ if (config.NODE_ENV === 'development') {
         stream: { write: (message: string) => logger.info(message.trim()) },
     }));
 }
+
+// Serve uploaded files (avatars, etc.)
+app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
 // API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

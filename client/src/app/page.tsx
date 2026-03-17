@@ -254,8 +254,8 @@ export default function HomePage() {
                 backgroundImage:
                   'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQhrvkpn7QIkSQrWD6ryk8-VjcLjjdfyBeE4MTZoL8wPCzy0f7NGQsTUQyRBxEXN5a1RtksfJFs3JP6KDlMnwX2ilQwOkEDreem4zWAIk6K4ja2AiLsC8X1l9kw69nbSiajR8kROHyMMSV6PxWZpVNXKK_AGL3gUsizt3p0fU6ZJx7G1w3LDWDBELQlyMdAB3jSth93Y-X6b3igC_x4s7UYAIbi8oZHg0lqng5pXU-9-Rr9ZVu2mHgntW_Vr1Ablp0pjEo7RowVb6x")',
               }}
-              href="/register"
-              aria-label="Create account"
+              href="/dashboard/profile"
+              aria-label="View profile"
             />
           </div>
         </header>
@@ -333,8 +333,9 @@ export default function HomePage() {
                       </div>
                     </div>
                   : books.map((book) => (
-                      <div
+                      <Link
                         key={book._id}
+                        href={`/books/${book._id}`}
                         className="group flex min-w-48 max-w-48 flex-col gap-3 rounded-lg transition-all duration-300 hover:scale-105"
                       >
                         <div
@@ -367,7 +368,7 @@ export default function HomePage() {
                             </span>
                           </div>
                         </div>
-                      </div>
+                      </Link>
                     ))}
             </div>
           </div>

@@ -74,6 +74,35 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * Update user avatar
+ */
+export const updateAvatar = asyncHandler(async (req: Request, res: Response) => {
+    const file = (req as Request & { file?: Express.Multer.File }).file;
+
+    if (!file) {
+        throw new AppError('Avatar file is required', 400, 'AVATAR_REQUIRED');
+    }
+
+    const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${file.filename}`;
+
+    const user = await User.findByIdAndUpdate(
+        req.params.id,
+        { avatar: avatarUrl },
+        { new: true, runValidators: true }
+    ).populate('libraryId', 'name code') as IUser | null;
+
+    if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    res.json({
+        success: true,
+        data: user,
+        message: 'Avatar updated successfully',
+    });
+});
+
+/**
  * Delete user
  */
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {

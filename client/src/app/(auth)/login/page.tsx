@@ -36,8 +36,17 @@ export default function LoginPage() {
     });
 
     useEffect(() => {
-        getCurrentUser();
-    }, [getCurrentUser]);
+        if (isAuthenticated || user?.role === "guest") return;
+
+        const token =
+            typeof window !== "undefined"
+                ? localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")
+                : null;
+
+        if (token) {
+            void getCurrentUser();
+        }
+    }, [getCurrentUser, isAuthenticated, user]);
 
     useEffect(() => {
         const rememberedEmail = localStorage.getItem("rememberedEmail");

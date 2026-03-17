@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { authService } from '../services';
-import { asyncHandler } from '../utils';
+import { asyncHandler, AppError } from '../utils';
 import { AuthRequest } from '../types';
 
 /**
@@ -63,6 +63,10 @@ export const logout = asyncHandler(async (req: AuthRequest, res: Response) => {
  */
 export const refreshToken = asyncHandler(async (req: Request, res: Response) => {
     const token = req.body.refreshToken || req.cookies.refreshToken;
+    if (!token) {
+        throw new AppError('Refresh token is required', 401, 'TOKEN_REQUIRED');
+    }
+
     const tokens = await authService.refreshToken(token);
 
     res.cookie('refreshToken', tokens.refreshToken, {

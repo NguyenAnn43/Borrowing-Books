@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -13,16 +13,35 @@ interface RouteGuardProps {
 export function RouteGuard({ children, allowedRoles }: RouteGuardProps) {
     const router = useRouter();
     const { isAuthenticated, user, isLoading, getCurrentUser } = useAuthStore();
+    const [isBootstrapped, setIsBootstrapped] = useState(false);
 
     useEffect(() => {
-        // Fetch current user nếu chưa có
-        if (!user) {
-            getCurrentUser();
-        }
+        let isMounted = true;
+
+        const bootstrapAuth = async () => {
+            const token =
+                typeof window !== "undefined"
+                    ? localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")
+                    : null;
+
+            if (!user && token) {
+                await getCurrentUser();
+            }
+
+            if (isMounted) {
+                setIsBootstrapped(true);
+            }
+        };
+
+        void bootstrapAuth();
+
+        return () => {
+            isMounted = false;
+        };
     }, [user, getCurrentUser]);
 
     useEffect(() => {
-        if (isLoading) return;
+        if (!isBootstrapped || isLoading) return;
 
         if (!isAuthenticated || !user) {
             router.replace("/login");
@@ -36,10 +55,10 @@ export function RouteGuard({ children, allowedRoles }: RouteGuardProps) {
             else if (user.role === "guest") router.replace("/dashboard/guest");
             else router.replace("/dashboard/user");
         }
-    }, [isAuthenticated, user, isLoading, allowedRoles, router]);
+    }, [isAuthenticated, user, isLoading, isBootstrapped, allowedRoles, router]);
 
     // Đang tải hoặc chưa xác thực → hiện loading
-    if (isLoading || !isAuthenticated || !user) {
+    if (!isBootstrapped || isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-950">
                 <div className="flex flex-col items-center gap-4">
@@ -51,6 +70,10 @@ export function RouteGuard({ children, allowedRoles }: RouteGuardProps) {
                 </div>
             </div>
         );
+    }
+
+    if (!isAuthenticated || !user) {
+        return null;
     }
 
     // Sai role → trống (redirect đang xảy ra)
