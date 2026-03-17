@@ -7,8 +7,10 @@ import { useAuthStore } from "@/stores/authStore";
 import { bookService } from "@/services/bookService";
 import { wishlistService } from "@/services/wishlistService";
 import type { IBook } from "@/types";
-
+import { useRouter } from "next/navigation";
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@/components/ui";
 export default function DashboardBooksPage() {
+    const router = useRouter();
     const { user } = useAuthStore();
     const [books, setBooks] = useState<IBook[]>([]);
     const [loading, setLoading] = useState(true);
@@ -107,6 +109,9 @@ export default function DashboardBooksPage() {
             setProcessingBookId(null);
         }
     };
+    const handleViewDetail = (book: IBook) => {
+        router.push(`/books/${book._id}`);
+    };
 
     return (
         <RouteGuard>
@@ -171,6 +176,13 @@ export default function DashboardBooksPage() {
                                         </span>
                                         <span>{book.wishlistCount ?? 0} luot yeu thich</span>
                                     </div>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleViewDetail(book)}
+                                    >
+                                        Xem chi tiết
+                                    </Button>
                                 </article>
                             );
                         })}

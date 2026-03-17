@@ -69,21 +69,21 @@ export interface IWishlistItem {
 
 // Borrowing types
 export interface IBorrowing {
-    _id: string;
-    userId: Pick<IUser, "_id" | "fullName" | "email">;
-    bookId: Pick<IBook, "_id" | "title" | "author" | "coverImage">;
-    libraryId: Pick<ILibrary, "_id" | "name" | "code">;
-    borrowDate: string;
-    dueDate: string;
-    returnDate?: string;
-    actualReturnDate?: string;
-    status: "pending" | "borrowed" | "returned" | "overdue";
-    fineAmount: number;
-    isFined: boolean;
-    notes?: string;
-    overdueDays?: number;
-    createdAt: string;
-    updatedAt: string;
+  _id: string;
+  userId: Pick<IUser, "_id" | "fullName" | "email">;
+  bookId: Pick<IBook, "_id" | "title" | "author" | "coverImage">;
+  libraryId: Pick<ILibrary, "_id" | "name" | "code">;
+  borrowDate: string;
+  dueDate: string;
+  returnDate?: string;
+  actualReturnDate?: string;
+  status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
+  fineAmount: number;
+  isFined: boolean;
+  notes?: string;
+  overdueDays?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Reservation types

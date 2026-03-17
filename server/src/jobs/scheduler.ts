@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { checkAndMarkOverdue } from '../services/borrowingService';
+import { checkAndMarkOverdue, autoCancelExpiredPending } from '../services/borrowingService';
 import { expireReservations } from '../services/reservationService';
 import { cleanupOld as cleanupOldNotifications } from '../services/notificationService';
 import logger from '../utils/logger';
@@ -45,5 +45,19 @@ export const startScheduler = (): void => {
         }
     });
 
-    logger.info('[Scheduler] All cron jobs registered');
+    // Job 4: Auto-cancel expired pending borrowings (>24h unpicked) — runs every 30 minutes
+    cron.schedule('*/30 * * * *', async () => {
+        logger.info('[Scheduler] Running autoCancelExpiredPending at', new Date());
+        try {
+            const count = await autoCancelExpiredPending();
+            logger.info(`[Scheduler] Auto-cancelled ${count} expired pending borrowing(s)`);
+            if (count === 0) {
+                logger.info('[Scheduler] No expired pending borrowings found');
+            }
+        } catch (err) {
+            logger.error('[Scheduler] autoCancelExpiredPending failed', err);
+        }
+    });
+
+    logger.info('[Scheduler] All cron jobs registered', new Date());
 };
