@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound } from "lucide-react";
+import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, Home } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { RouteGuard } from "@/components/RouteGuard";
 
@@ -94,6 +94,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 </span>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Exit Dashboard */}
+                    <div className="px-3 py-3 border-b border-white/5">
+                        <Link
+                            href="/"
+                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                            <Home className="h-4 w-4" />
+                            <span>Quay lại trang chủ</span>
+                        </Link>
                     </div>
 
                     {/* Nav */}

@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { bookService } from "@/services/bookService";
 import { wishlistService } from "@/services/wishlistService";
 import { useAuthStore } from "@/stores/authStore";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import type { IBook } from "@/types";
 
 const FALLBACK_COVER =
@@ -53,46 +55,6 @@ const normalizeCategory = (value?: string): string => {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 };
 
-const HEADER_NAV_ITEMS = [
-  { label: "Home", href: "/" },
-  { label: "Browse", href: "#browse" },
-  { label: "Libraries", href: "#libraries" },
-  { label: "About", href: "#about" },
-];
-
-const FOOTER_LINK_SECTIONS = [
-  {
-    title: "Services",
-    links: [
-      { label: "E-Books", href: "/dashboard/books" },
-      { label: "Audiobooks", href: "/dashboard/books" },
-      { label: "Local Events", href: "#about" },
-    ],
-  },
-  {
-    title: "Platform",
-    links: [
-      { label: "For Librarians", href: "/login" },
-      { label: "API Access", href: "/login" },
-      { label: "Mobile App", href: "/register" },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
-      { label: "About Us", href: "#about" },
-      { label: "Support", href: "mailto:support@mosa-library.local" },
-      { label: "Contact", href: "mailto:contact@mosa-library.local" },
-    ],
-  },
-];
-
-const FOOTER_SOCIAL_LINKS = [
-  { icon: "public", href: "/" },
-  { icon: "rss_feed", href: "#browse" },
-  { icon: "alternate_email", href: "mailto:contact@mosa-library.local" },
-];
-
 export default function HomePage() {
   const [books, setBooks] = useState<IBook[]>([]);
   const [allBooks, setAllBooks] = useState<IBook[]>([]);
@@ -107,16 +69,7 @@ export default function HomePage() {
   const [wishlistMessageType, setWishlistMessageType] = useState<"info" | "error">("info");
   const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
   const [wishlistLoadingBookId, setWishlistLoadingBookId] = useState<string | null>(null);
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const accountMenuRef = useRef<HTMLDivElement>(null);
-  const { user, isAuthenticated, getCurrentUser, logout } = useAuthStore();
-  const isSignedIn = isAuthenticated && Boolean(user) && user?.role !== "guest";
-
-  const dashboardHref = user?.role === "admin"
-    ? "/dashboard/admin"
-    : user?.role === "librarian"
-      ? "/dashboard/librarian"
-      : "/dashboard/user";
+  const { user, getCurrentUser } = useAuthStore();
 
   const loadBooks = useCallback(async (nextQuery = "", nextCategory = "") => {
     setIsLoadingBooks(true);
@@ -186,19 +139,7 @@ export default function HomePage() {
     void getCurrentUser();
   }, [getCurrentUser]);
 
-  useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (!accountMenuRef.current) return;
-      if (!accountMenuRef.current.contains(event.target as Node)) {
-        setIsAccountMenuOpen(false);
-      }
-    };
 
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
-    };
-  }, []);
 
   useEffect(() => {
     if (!wishlistMessage) return;
@@ -255,6 +196,7 @@ export default function HomePage() {
     event.preventDefault();
     event.stopPropagation();
 
+    const isSignedIn = user && user.role !== "guest";
     if (!isSignedIn) {
       setWishlistMessageType("info");
       setWishlistMessage("Bạn cần đăng nhập để thêm sách vào wishlist.");
@@ -330,113 +272,7 @@ export default function HomePage() {
       `}</style>
 
       <div className="mx-auto w-full max-w-[1200px]">
-        <header className="flex items-center justify-between border-b border-[#f0f2f4] bg-white px-6 py-3 shadow-sm transition-shadow duration-300 dark:border-gray-800 dark:bg-[#101622] md:px-10">
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-4 text-[#2b6cee] transition-transform duration-300 hover:scale-105">
-              <div className="size-6">
-                <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </div>
-              <Link href="/" className="text-xl font-extrabold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white">
-                Mosa
-              </Link>
-            </div>
-            <nav className="hidden items-center gap-9 md:flex">
-              {HEADER_NAV_ITEMS.map((item) => (
-                <Link
-                  key={item.label}
-                  className="text-sm font-semibold leading-normal text-[#111318] transition-all duration-300 hover:text-[#2b6cee] dark:text-gray-200"
-                  href={item.href}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-
-          <div className="flex flex-1 items-center justify-end gap-4 md:gap-6">
-            <label className="hidden h-10 min-w-40 max-w-64 flex-col lg:flex">
-              <form className="flex h-full w-full flex-1 items-stretch rounded-lg" onSubmit={handleSearch}>
-                <div className="flex items-center justify-center rounded-l-lg border-r-0 bg-gray-100 pl-4 text-[#616f89] transition-colors duration-300 dark:bg-gray-800">
-                  <span className="material-symbols-outlined text-xl">search</span>
-                </div>
-                <input
-                  className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-l-none border-none border-l-0 bg-gray-100 px-4 pl-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-none focus:outline-0 focus:ring-0 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-700"
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Quick search..."
-                />
-              </form>
-            </label>
-
-            {isSignedIn ? (
-              <div className="relative" ref={accountMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsAccountMenuOpen((prev) => !prev)}
-                  className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-[#111318] transition-all duration-300 hover:border-[#2b6cee] hover:text-[#2b6cee] dark:border-gray-700 dark:bg-[#101622] dark:text-gray-200"
-                >
-                  <span className="flex size-7 items-center justify-center rounded-full bg-[#2b6cee] text-xs font-bold text-white">
-                    {user?.fullName?.charAt(0).toUpperCase() ?? "U"}
-                  </span>
-                  <span className="hidden sm:inline">Tài khoản</span>
-                  <span className="material-symbols-outlined text-base">expand_more</span>
-                </button>
-
-                {isAccountMenuOpen ? (
-                  <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-gray-700 dark:bg-[#0f172a]">
-                    <Link
-                      href={dashboardHref}
-                      onClick={() => setIsAccountMenuOpen(false)}
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
-                    >
-                      Vào Dashboard
-                    </Link>
-                    {(user?.role === "admin" || user?.role === "librarian") ? (
-                      <Link
-                        href={dashboardHref}
-                        onClick={() => setIsAccountMenuOpen(false)}
-                        className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
-                      >
-                        Quản trị
-                      </Link>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await logout();
-                        setIsAccountMenuOpen(false);
-                      }}
-                      className="mt-1 flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                    >
-                      Đăng xuất
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                <Link href="/login" className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#2b6cee] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:bg-blue-700 hover:shadow-lg active:scale-95 dark:hover:bg-blue-600">
-                  <span className="truncate">Sign In</span>
-                </Link>
-
-                <Link
-                  className="size-10 overflow-hidden rounded-full border border-gray-200 bg-cover bg-center bg-no-repeat transition-all duration-300 hover:ring-2 hover:ring-[#2b6cee] hover:ring-offset-2 dark:border-gray-700 dark:hover:ring-offset-[#101622]"
-                  style={{
-                    backgroundImage:
-                      'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQhrvkpn7QIkSQrWD6ryk8-VjcLjjdfyBeE4MTZoL8wPCzy0f7NGQsTUQyRBxEXN5a1RtksfJFs3JP6KDlMnwX2ilQwOkEDreem4zWAIk6K4ja2AiLsC8X1l9kw69nbSiajR8kROHyMMSV6PxWZpVNXKK_AGL3gUsizt3p0fU6ZJx7G1w3LDWDBELQlyMdAB3jSth93Y-X6b3igC_x4s7UYAIbi8oZHg0lqng5pXU-9-Rr9ZVu2mHgntW_Vr1Ablp0pjEo7RowVb6x")',
-                  }}
-                  href="/register"
-                  aria-label="Create account"
-                />
-              </>
-            )}
-          </div>
-        </header>
+        <Header searchText={searchText} onSearchChange={setSearchText} onSearch={handleSearch} showSearch={true} />
 
         <section className="px-4 py-5 sm:px-6">
           <div
@@ -619,87 +455,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <footer id="about" className="border-t border-[#f0f2f4] bg-white py-10 scroll-mt-20 shadow-sm dark:border-gray-800 dark:bg-[#101622]">
-          <div className="px-6 md:px-10">
-            <div className="flex flex-col items-start justify-between gap-10 md:flex-row">
-              <div className="flex max-w-xs flex-col gap-4">
-                <div className="flex items-center gap-3 text-[#2b6cee] transition-transform duration-300 hover:scale-105">
-                  <div className="size-5">
-                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                      <path
-                        d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg font-bold">Mosa Library</h2>
-                </div>
-                <p className="text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                  Modernizing the way we explore knowledge. Connecting libraries,
-                  readers, and stories across the globe.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-12 sm:grid-cols-3">
-                {FOOTER_LINK_SECTIONS.map((section) => (
-                  <div key={section.title} className="flex flex-col gap-4">
-                    <h4 className="text-sm font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                      {section.title}
-                    </h4>
-                    {section.links.map((link) => (
-                      link.href.startsWith("mailto:")
-                        ? (
-                            <a
-                              key={link.label}
-                              className="text-sm font-medium text-gray-600 transition-colors duration-300 hover:text-[#2b6cee] dark:text-gray-400 dark:hover:text-blue-400"
-                              href={link.href}
-                            >
-                              {link.label}
-                            </a>
-                          )
-                        : (
-                            <Link
-                              key={link.label}
-                              className="text-sm font-medium text-gray-600 transition-colors duration-300 hover:text-[#2b6cee] dark:text-gray-400 dark:hover:text-blue-400"
-                              href={link.href}
-                            >
-                              {link.label}
-                            </Link>
-                          )
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-gray-100 pt-8 dark:border-gray-800 md:flex-row">
-              <p className="text-xs text-gray-400">© 2024 Mosa Library Systems. All rights reserved.</p>
-              <div className="flex gap-6">
-                {FOOTER_SOCIAL_LINKS.map((item) => (
-                  item.href.startsWith("mailto:")
-                    ? (
-                        <a
-                          key={item.icon}
-                          className="text-gray-400 transition-all duration-300 hover:scale-110 hover:text-[#2b6cee] dark:hover:text-blue-400"
-                          href={item.href}
-                        >
-                          <span className="material-symbols-outlined text-lg">{item.icon}</span>
-                        </a>
-                      )
-                    : (
-                        <Link
-                          key={item.icon}
-                          className="text-gray-400 transition-all duration-300 hover:scale-110 hover:text-[#2b6cee] dark:hover:text-blue-400"
-                          href={item.href}
-                        >
-                          <span className="material-symbols-outlined text-lg">{item.icon}</span>
-                        </Link>
-                      )
-                ))}
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );
