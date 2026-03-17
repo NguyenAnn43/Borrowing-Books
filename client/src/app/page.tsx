@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { bookService } from "@/services/bookService";
 import { wishlistService } from "@/services/wishlistService";
@@ -70,7 +70,7 @@ export default function HomePage() {
   const [wishlistMessageType, setWishlistMessageType] = useState<"info" | "error">("info");
   const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
   const [wishlistLoadingBookId, setWishlistLoadingBookId] = useState<string | null>(null);
-const { user, getCurrentUser } = useAuthStore();
+  const { user, getCurrentUser } = useAuthStore();
 
   const loadBooks = useCallback(async (nextQuery = "", nextCategory = "") => {
     setIsLoadingBooks(true);
@@ -93,8 +93,72 @@ const { user, getCurrentUser } = useAuthStore();
         }),
       ]);
 
-      const libraryCountEntries = await Promise.all(
-        featuredBooks.map(async (book) => {
+      setBooks(featuredBooks);
+      setAllBooks(categorySourceBooks);
+      setWishlistedBookIds(
+        featuredBooks.reduce<Record<string, boolean>>((acc, book) => {
+          acc[book._id] = Boolean(book.isWishlisted);
+          return acc;
+        }, {})
+      );
+      setLibraryPresenceByBookId((prev) => {
+        const next = { ...prev };
+        featuredBooks.forEach((book) => {
+          if (!next[book._id]) {
+            next[book._id] = 1;
+          }
+        });
+        return next;
+      });
+    } catch {
+      setError("Không tải được dữ liệu sách. Vui lòng thử lại.");
+      setBooks([]);
+      setAllBooks([]);
+      setWishlistedBookIds({});
+      setLibraryPresenceByBookId({});
+    } finally {
+      setIsLoadingBooks(false);
+      setIsLoadingCategories(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+    void loadBooks();
+  }, [loadBooks]);
+
+  useEffect(() => {
+    const section = browseSectionRef.current;
+    if (!section) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry?.isIntersecting) {
+          setShouldLoadLibraryPresence(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "120px" }
+    );
+
+    observer.observe(section);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!shouldLoadLibraryPresence || books.length === 0) return;
+
+    const pendingBooks = books.filter((book) => !libraryPresenceByBookId[book._id]);
+    if (pendingBooks.length === 0) return;
+
+    let cancelled = false;
+
+    const loadLibraryPresence = async () => {
+      const entries = await Promise.all(
+        pendingBooks.map(async (book) => {
           try {
             const alternatives = await bookService.getBookAlternatives(book._id);
 
@@ -111,30 +175,20 @@ const { user, getCurrentUser } = useAuthStore();
         })
       );
 
-      setBooks(featuredBooks);
-      setAllBooks(categorySourceBooks);
-      setWishlistedBookIds(
-        featuredBooks.reduce<Record<string, boolean>>((acc, book) => {
-          acc[book._id] = Boolean(book.isWishlisted);
-          return acc;
-        }, {})
-      );
-      setLibraryPresenceByBookId(Object.fromEntries(libraryCountEntries));
-    } catch {
-      setError("Không tải được dữ liệu sách. Vui lòng thử lại.");
-      setBooks([]);
-      setAllBooks([]);
-      setWishlistedBookIds({});
-      setLibraryPresenceByBookId({});
-    } finally {
-      setIsLoadingBooks(false);
-      setIsLoadingCategories(false);
-    }
-  }, []);
+      if (cancelled) return;
 
-  useEffect(() => {
-    void loadBooks();
-  }, [loadBooks]);
+      setLibraryPresenceByBookId((prev) => ({
+        ...prev,
+        ...Object.fromEntries(entries),
+      }));
+    };
+
+    void loadLibraryPresence();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [books, libraryPresenceByBookId, shouldLoadLibraryPresence]);
 
   useEffect(() => {
     void getCurrentUser();
@@ -172,7 +226,7 @@ const { user, getCurrentUser } = useAuthStore();
         bg: CATEGORY_STYLE_POOL[index % CATEGORY_STYLE_POOL.length].bg,
       }));
   }, [allBooks]);
-const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuery = searchText.trim();
     setQuery(normalizedQuery);
@@ -301,7 +355,7 @@ font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
                 <input
                   className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl rounded-l-none rounded-r-none border border-l-0 border-r-0 border-white/20 bg-white px-[15px] pl-2 pr-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-white/30 focus:outline-0 focus:ring-0 sm:text-lg"
                   value={searchText}
-onChange={(event) => setSearchText(event.target.value)}
+                  onChange={(event) => setSearchText(event.target.value)}
                   placeholder="Search by title, author, or ISBN"
                 />
                 <div className="flex items-center justify-center rounded-r-xl border border-l-0 border-white/20 bg-white pr-[7px]">
@@ -318,7 +372,7 @@ onChange={(event) => setSearchText(event.target.value)}
           </div>
         </section>
 
-        <section id="browse" className="py-5 scroll-mt-20">
+        <section id="browse" ref={browseSectionRef} className="py-5 scroll-mt-20">
           <div className="flex items-center justify-between px-4 pb-3 pt-5">
             <h2 className="text-2xl font-extrabold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white">
               Most Borrowed Books
@@ -460,7 +514,7 @@ onChange={(event) => setSearchText(event.target.value)}
         </section>
 
         <Footer />
-</div>
+      </div>
     </div>
   );
 }
