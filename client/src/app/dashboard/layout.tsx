@@ -38,7 +38,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             label: "Tổng quan",
             icon: LayoutDashboard,
         },
-        { href: "/dashboard/books", label: "Sách", icon: BookOpen },
+        ...(user?.role !== "admin"
+            ? [{ href: "/dashboard/books", label: "Sách", icon: BookOpen }]
+            : []),
         ...(user?.role === "user"
             ? [
                 { href: "/dashboard/borrowings", label: "Mượn của tôi", icon: BookCopy },
@@ -46,7 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
               ]
             : []),
-        ...(user?.role === "admin" || user?.role === "librarian"
+                ...(user?.role === "librarian"
             ? [
                 { href: "/dashboard/borrowings", label: "Quản lý mượn/trả", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },

@@ -59,7 +59,7 @@ router.get(
 router.put(
     '/:id/confirm',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.confirmPickup
 );
@@ -68,7 +68,7 @@ router.put(
 router.put(
     '/:id/return',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.returnBook
 );
@@ -77,7 +77,7 @@ router.put(
 router.put(
     '/:id/pay-fine',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.payFine
 );

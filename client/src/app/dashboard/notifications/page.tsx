@@ -1,0 +1,149 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Bell, Loader2 } from "lucide-react";
+import { RouteGuard } from "@/components/RouteGuard";
+import { notificationService } from "@/services/notificationService";
+import type { INotification } from "@/types";
+
+export default function NotificationsPage() {
+    const [notifications, setNotifications] = useState<INotification[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
+    const [unreadOnly, setUnreadOnly] = useState(false);
+
+    const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications]);
+
+    const fetchNotifications = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const { notifications: data } = await notificationService.getMyNotifications({
+                page: 1,
+                limit: 100,
+                unreadOnly,
+            });
+            setNotifications(data);
+        } catch (fetchError) {
+            const message = fetchError instanceof Error ? fetchError.message : "Không tải được thông báo.";
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void fetchNotifications();
+    }, [unreadOnly]);
+
+    const handleMarkAsRead = async (id: string) => {
+        setActionLoading(true);
+        setError(null);
+        setSuccess(null);
+        try {
+            await notificationService.markAsRead(id);
+            setSuccess("Đã đánh dấu đã đọc.");
+            await fetchNotifications();
+        } catch (markError) {
+            const message = markError instanceof Error ? markError.message : "Không thể cập nhật thông báo.";
+            setError(message);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleMarkAllAsRead = async () => {
+        setActionLoading(true);
+        setError(null);
+        setSuccess(null);
+        try {
+            await notificationService.markAllAsRead();
+            setSuccess("Đã đánh dấu tất cả là đã đọc.");
+            await fetchNotifications();
+        } catch (markError) {
+            const message = markError instanceof Error ? markError.message : "Không thể cập nhật thông báo.";
+            setError(message);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    return (
+        <RouteGuard allowedRoles={["admin", "librarian", "user", "guest"]}>
+            <div className="p-8 space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h1 className="text-2xl font-bold text-white">Thông báo</h1>
+                        <p className="text-sm text-slate-400 mt-1">{unreadCount} thông báo chưa đọc</p>
+                    </div>
+
+                    <div className="inline-flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setUnreadOnly((prev) => !prev)}
+                            className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200 hover:bg-indigo-500/20"
+                        >
+                            {unreadOnly ? "Hiện tất cả" : "Chỉ chưa đọc"}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleMarkAllAsRead()}
+                            disabled={actionLoading || notifications.length === 0}
+                            className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-200 hover:bg-blue-500/20 disabled:opacity-60"
+                        >
+                            Đánh dấu tất cả đã đọc
+                        </button>
+                    </div>
+                </div>
+
+                {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
+                {success && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}
+
+                <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+                    {loading ? (
+                        <div className="flex items-center gap-2 text-slate-300 text-sm">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Đang tải...
+                        </div>
+                    ) : notifications.length === 0 ? (
+                        <p className="text-sm text-slate-400">Không có thông báo.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            {notifications.map((item) => (
+                                <article
+                                    key={item._id}
+                                    className={`rounded-xl border p-4 ${item.isRead ? "border-white/10 bg-slate-800/40" : "border-blue-500/30 bg-blue-500/10"}`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                                                <Bell className="h-4 w-4 text-blue-300" />
+                                                {item.title}
+                                            </h3>
+                                            <p className="mt-1 text-sm text-slate-300">{item.message}</p>
+                                            <p className="mt-2 text-xs text-slate-400">
+                                                {new Date(item.createdAt).toLocaleString("vi-VN")} · {item.type}
+                                            </p>
+                                        </div>
+
+                                        {!item.isRead && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleMarkAsRead(item._id)}
+                                                disabled={actionLoading}
+                                                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
+                                            >
+                                                Đã đọc
+                                            </button>
+                                        )}
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+                </section>
+            </div>
+        </RouteGuard>
+    );
+}

@@ -69,4 +69,28 @@ export const borrowingService = {
         const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/return`);
         return response.data.data;
     },
+
+    /**
+     * Pay fine (admin/librarian)
+     */
+    payFine: async (id: string): Promise<IBorrowing> => {
+        const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/pay-fine`);
+        return response.data.data;
+    },
+
+    /**
+     * Cancel pending borrowing (owner)
+     */
+    cancelBorrowing: async (id: string): Promise<IBorrowing> => {
+        const response = await api.delete<ApiResponse<IBorrowing>>(`/borrowings/${id}/cancel`);
+        return response.data.data;
+    },
+
+    /**
+     * Renew active borrowing (owner)
+     */
+    renewBorrowing: async (id: string): Promise<IBorrowing> => {
+        const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/renew`);
+        return response.data.data;
+    },
 };

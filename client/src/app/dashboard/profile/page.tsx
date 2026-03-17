@@ -1,7 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type ElementType, useEffect, useRef, useState } from "react";
-import { Building2, CalendarClock, ImageUp, Mail, Pencil, Phone, RefreshCw, Save, Shield, UserRound, X } from "lucide-react";
+import { Building2, CalendarClock, ImageUp, KeyRound, Mail, Pencil, Phone, RefreshCw, Save, Shield, UserRound, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
 import { userService } from "@/services/userService";
@@ -62,8 +62,14 @@ export default function ProfilePage() {
     const [phone, setPhone] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
+    const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
     useEffect(() => {
         setFullName(user?.fullName ?? "");
@@ -147,6 +153,47 @@ export default function ProfilePage() {
         } finally {
             setIsUploadingAvatar(false);
             event.target.value = "";
+        }
+    };
+
+    const handleChangePassword = async () => {
+        if (!canEdit) return;
+
+        setPasswordError(null);
+        setPasswordSuccess(null);
+
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            setPasswordError("Vui lòng nhập đầy đủ thông tin mật khẩu.");
+            return;
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            setPasswordError("Mật khẩu mới và xác nhận mật khẩu không khớp.");
+            return;
+        }
+
+        const passwordRule = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+        if (!passwordRule.test(newPassword)) {
+            setPasswordError("Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.");
+            return;
+        }
+
+        setIsChangingPassword(true);
+        try {
+            await userService.changePassword({
+                currentPassword,
+                newPassword,
+            });
+
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmNewPassword("");
+            setPasswordSuccess("Đổi mật khẩu thành công.");
+        } catch (changePasswordError) {
+            const message = changePasswordError instanceof Error ? changePasswordError.message : "Không thể đổi mật khẩu.";
+            setPasswordError(message);
+        } finally {
+            setIsChangingPassword(false);
         }
     };
 
@@ -320,6 +367,67 @@ export default function ProfilePage() {
                                 Hạn mức mượn hiện tại: <span className="font-semibold text-white">{user.maxBorrowLimit}</span> quyển.
                             </p>
                         </div>
+
+                        {canEdit && (
+                            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+                                <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                                    <KeyRound className="h-4 w-4 text-amber-300" />
+                                    Đổi mật khẩu
+                                </h3>
+
+                                {passwordError && (
+                                    <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                                        {passwordError}
+                                    </div>
+                                )}
+
+                                {passwordSuccess && (
+                                    <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                                        {passwordSuccess}
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <input
+                                        type="password"
+                                        value={currentPassword}
+                                        onChange={(event) => setCurrentPassword(event.target.value)}
+                                        className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+                                        placeholder="Mật khẩu hiện tại"
+                                        autoComplete="current-password"
+                                        disabled={isChangingPassword}
+                                    />
+                                    <input
+                                        type="password"
+                                        value={newPassword}
+                                        onChange={(event) => setNewPassword(event.target.value)}
+                                        className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+                                        placeholder="Mật khẩu mới"
+                                        autoComplete="new-password"
+                                        disabled={isChangingPassword}
+                                    />
+                                    <input
+                                        type="password"
+                                        value={confirmNewPassword}
+                                        onChange={(event) => setConfirmNewPassword(event.target.value)}
+                                        className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+                                        placeholder="Xác nhận mật khẩu mới"
+                                        autoComplete="new-password"
+                                        disabled={isChangingPassword}
+                                    />
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => void handleChangePassword()}
+                                    disabled={isChangingPassword}
+                                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200 hover:bg-amber-500/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                                >
+                                    <KeyRound className="h-4 w-4" />
+                                    {isChangingPassword ? "Đang cập nhật..." : "Đổi mật khẩu"}
+                                </button>
+                            </div>
+                        )}
                     </>
                 )}
             </div>

@@ -1,20 +1,65 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Users, BookOpen, Library, BookCopy, TrendingUp, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { RouteGuard } from "@/components/RouteGuard";
-
-const stats = [
-    { label: "Tổng người dùng", value: "—", icon: Users, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
-    { label: "Sách trong hệ thống", value: "—", icon: BookOpen, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
-    { label: "Thư viện đang hoạt động", value: "—", icon: Library, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-    { label: "Đang mượn", value: "—", icon: BookCopy, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-    { label: "Quá hạn", value: "—", icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
-    { label: "Đặt trước chờ xử lý", value: "—", icon: TrendingUp, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20" },
-];
+import { userService } from "@/services/userService";
+import { bookService } from "@/services/bookService";
+import { libraryService } from "@/services/libraryService";
+import { borrowingService } from "@/services/borrowingService";
+import { reservationService } from "@/services/reservationService";
 
 export default function AdminDashboard() {
     const { user } = useAuthStore();
+    const [counts, setCounts] = useState({
+        users: 0,
+        books: 0,
+        activeLibraries: 0,
+        borrowed: 0,
+        overdue: 0,
+        pendingReservations: 0,
+    });
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const [usersRes, booksRes, librariesRes, borrowedRes, overdueRes, pendingReservationsRes] = await Promise.all([
+                    userService.getUsers({ page: 1, limit: 1 }),
+                    bookService.getBooks({ page: 1, limit: 1 }),
+                    libraryService.getLibraries({ page: 1, limit: 100 }),
+                    borrowingService.getBorrowings({ page: 1, limit: 1, status: "borrowed" }),
+                    borrowingService.getBorrowings({ page: 1, limit: 1, status: "overdue" }),
+                    reservationService.getReservations({ page: 1, limit: 1, status: "pending" }),
+                ]);
+
+                setCounts({
+                    users: usersRes.pagination.total,
+                    books: booksRes.pagination.total,
+                    activeLibraries: librariesRes.libraries.filter((library) => library.status === "active").length,
+                    borrowed: borrowedRes.pagination.total,
+                    overdue: overdueRes.pagination.total,
+                    pendingReservations: pendingReservationsRes.pagination.total,
+                });
+            } catch {
+                // keep defaults if stats fail to load
+            }
+        };
+
+        void fetchStats();
+    }, []);
+
+    const stats = useMemo(
+        () => [
+            { label: "Tổng người dùng", value: String(counts.users), icon: Users, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+            { label: "Sách trong hệ thống", value: String(counts.books), icon: BookOpen, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
+            { label: "Thư viện đang hoạt động", value: String(counts.activeLibraries), icon: Library, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+            { label: "Đang mượn", value: String(counts.borrowed), icon: BookCopy, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
+            { label: "Quá hạn", value: String(counts.overdue), icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
+            { label: "Đặt trước chờ xử lý", value: String(counts.pendingReservations), icon: TrendingUp, color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/20" },
+        ],
+        [counts]
+    );
 
     return (
         <RouteGuard allowedRoles={["admin"]}>
@@ -55,8 +100,8 @@ export default function AdminDashboard() {
                         {[
                             { label: "Thêm thư viện mới", icon: Library, href: "/dashboard/libraries" },
                             { label: "Quản lý người dùng", icon: Users, href: "/dashboard/users" },
-                            { label: "Thêm sách", icon: BookOpen, href: "/dashboard/books" },
-                            { label: "Xem danh sách mượn", icon: BookCopy, href: "/dashboard/borrowings" },
+                            { label: "Hồ sơ cá nhân", icon: Users, href: "/dashboard/profile" },
+                            { label: "Thông báo", icon: BookCopy, href: "/dashboard/notifications" },
                         ].map((action) => {
                             const Icon = action.icon;
                             return (

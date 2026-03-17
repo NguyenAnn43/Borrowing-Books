@@ -51,7 +51,7 @@ router.get(
 router.put(
     '/:id/ready',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(reservationIdSchema),
     reservationController.markReady
 );
@@ -60,7 +60,7 @@ router.put(
 router.put(
     '/:id/fulfill',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(reservationIdSchema),
     reservationController.fulfillReservation
 );

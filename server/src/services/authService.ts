@@ -3,7 +3,7 @@ import { User } from '../models';
 import { AppError } from '../utils';
 import config from '../config/env';
 import { IUser } from '../types';
-import { RegisterInput } from '../validators/authSchema';
+import { ChangePasswordInput, RegisterInput } from '../validators/authSchema';
 import {
     requestRegisterOtp as requestRegisterOtpService,
     verifyRegisterOtp as verifyRegisterOtpService,
@@ -178,4 +178,32 @@ export const getCurrentUser = async (userId: string): Promise<IUser> => {
         throw new AppError('User not found', 404, 'USER_NOT_FOUND');
     }
     return user;
+};
+
+/**
+ * Change current user password
+ */
+export const changePassword = async (
+    userId: string,
+    data: ChangePasswordInput
+): Promise<boolean> => {
+    const user = await User.findById(userId).select('+password') as IUser | null;
+    if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    const { currentPassword, newPassword } = data;
+    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+        throw new AppError('Current password is incorrect', 400, 'INVALID_CURRENT_PASSWORD');
+    }
+
+    const isSameAsOld = await user.comparePassword(newPassword);
+    if (isSameAsOld) {
+        throw new AppError('New password must be different from current password', 400, 'PASSWORD_UNCHANGED');
+    }
+
+    user.password = newPassword;
+    await user.save();
+    return true;
 };

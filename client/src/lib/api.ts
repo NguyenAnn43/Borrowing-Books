@@ -2,6 +2,8 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 const SESSION_EXPIRY_KEY = "auth-session-expiry";
+let refreshTokenInFlight: Promise<string> | null = null;
+let hasRedirectedToLogin = false;
 
 const getAccessToken = (): string | null => {
     if (typeof window === "undefined") return null;
@@ -92,14 +94,20 @@ api.interceptors.response.use(
             originalRequest._retry = true;
 
             try {
-                // Try to refresh token
-                const response = await axios.post(
-                    `${API_URL}/auth/refresh-token`,
-                    {},
-                    { withCredentials: true }
-                );
+                if (!refreshTokenInFlight) {
+                    refreshTokenInFlight = axios
+                        .post(
+                            `${API_URL}/auth/refresh-token`,
+                            {},
+                            { withCredentials: true }
+                        )
+                        .then((response) => response.data.data.accessToken as string)
+                        .finally(() => {
+                            refreshTokenInFlight = null;
+                        });
+                }
 
-                const { accessToken } = response.data.data;
+                const accessToken = await refreshTokenInFlight;
                 saveAccessToken(accessToken);
 
                 // Retry original request
@@ -108,7 +116,8 @@ api.interceptors.response.use(
             } catch (refreshError) {
                 // Refresh failed, clear storage and redirect to login
                 clearAccessToken();
-                if (typeof window !== "undefined") {
+                if (typeof window !== "undefined" && !hasRedirectedToLogin) {
+                    hasRedirectedToLogin = true;
                     window.location.href = "/login";
                 }
                 return Promise.reject(refreshError);

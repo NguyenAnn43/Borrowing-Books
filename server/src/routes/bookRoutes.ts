@@ -10,11 +10,11 @@ const router: IRouter = Router();
 router.get('/', optionalAuth, validate(searchBooksSchema), bookController.getBooks);
 router.get('/:id', optionalAuth, validate(getBookByIdSchema), bookController.getBookById);
 
-// Protected routes (Librarian/Admin)
+// Protected routes (Librarian only)
 router.post(
     '/',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(createBookSchema),
     bookController.createBook
 );
@@ -22,7 +22,7 @@ router.post(
 router.put(
     '/:id',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBookSchema),
     bookController.updateBook
 );
@@ -30,7 +30,7 @@ router.put(
 router.delete(
     '/:id',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     bookController.deleteBook
 );
 
