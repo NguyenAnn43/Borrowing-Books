@@ -15,6 +15,10 @@ interface BookDetailViewProps {
   recommendationType?: "alternatives" | "related";
   loading: boolean;
   error: string;
+  onReserve?: () => void;
+  reserveLoading?: boolean;
+  reserveMessage?: string;
+  reserveError?: string;
 }
 
 function BookCard({ book }: { book: IBook }) {
@@ -34,7 +38,17 @@ function BookCard({ book }: { book: IBook }) {
   );
 }
 
-export default function BookDetailView({ book, recommendations, recommendationType = "related", loading, error }: BookDetailViewProps) {
+export default function BookDetailView({
+  book,
+  recommendations,
+  recommendationType = "related",
+  loading,
+  error,
+  onReserve,
+  reserveLoading = false,
+  reserveMessage = "",
+  reserveError = "",
+}: BookDetailViewProps) {
   const { user } = useAuthStore();
   const cartStore = useCartStore();
 
@@ -147,6 +161,34 @@ export default function BookDetailView({ book, recommendations, recommendationTy
               </button>
             )}
           </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onReserve}
+              disabled={!onReserve || reserveLoading || book.availableCopies > 0}
+              className="rounded-lg bg-[#2b6cee] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1e4cba] disabled:cursor-not-allowed disabled:opacity-60"
+              title={book.availableCopies > 0 ? "Sách còn sẵn, vui lòng mượn trực tiếp" : "Đặt trước khi sách hết"}
+            >
+              {reserveLoading ? "Đang đặt trước..." : "Đặt trước"}
+            </button>
+            {book.availableCopies > 0 && (
+              <span className="text-xs text-amber-600 dark:text-amber-300">
+                Sách đang có sẵn, hệ thống chỉ cho đặt trước khi đã hết sách.
+              </span>
+            )}
+          </div>
+
+          {reserveMessage && (
+            <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-700/30 dark:bg-emerald-900/20 dark:text-emerald-300">
+              {reserveMessage}
+            </div>
+          )}
+          {reserveError && (
+            <div className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/20 dark:text-red-300">
+              {reserveError}
+            </div>
+          )}
         </div>
       </section>
 

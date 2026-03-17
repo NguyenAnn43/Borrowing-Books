@@ -7,6 +7,9 @@ import { useAuthStore } from "@/stores/authStore";
 import { borrowingService } from "@/services/borrowingService";
 import type { IBorrowing } from "@/types";
 
+const RENEWAL_DAYS = 7;
+const DEFAULT_MAX_RENEWALS = 2;
+
 export default function BorrowingsPage() {
     const { user } = useAuthStore();
     const [borrowings, setBorrowings] = useState<IBorrowing[]>([]);
@@ -65,6 +68,11 @@ export default function BorrowingsPage() {
                     <p className="text-sm text-slate-400 mt-1">
                         {canManage ? "Xử lý mượn, trả, thu phạt" : canViewAll ? "Admin chỉ giám sát dữ liệu mượn/trả" : "Theo dõi và quản lý lịch sử mượn"}
                     </p>
+                    {!canViewAll && (
+                        <p className="text-xs text-indigo-300 mt-2">
+                            Chính sách gia hạn: mỗi lần gia hạn cộng thêm {RENEWAL_DAYS} ngày, tối đa {DEFAULT_MAX_RENEWALS} lần.
+                        </p>
+                    )}
                 </div>
 
                 {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
@@ -92,7 +100,12 @@ export default function BorrowingsPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {borrowings.map((item) => (
+                                    {borrowings.map((item) => {
+                                        const renewalCount = item.renewalCount ?? 0;
+                                        const maxRenewals = item.maxRenewals ?? DEFAULT_MAX_RENEWALS;
+                                        const reachedRenewalLimit = renewalCount >= maxRenewals;
+
+                                        return (
                                         <tr key={item._id} className="border-b border-white/5 text-slate-200">
                                             <td className="py-2 pr-3">{item.bookId?.title || "-"}</td>
                                             <td className="py-2 pr-3">{item.userId?.fullName || "-"}</td>
@@ -149,17 +162,27 @@ export default function BorrowingsPage() {
                                                     {!canViewAll && item.status === "borrowed" && (
                                                         <button
                                                             type="button"
-                                                            disabled={actionLoading === item._id}
-                                                            onClick={() => void runAction(item._id, () => borrowingService.renewBorrowing(item._id), "Gia hạn thành công.")}
-                                                            className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs text-indigo-200 hover:bg-indigo-500/20 disabled:opacity-60"
+                                                            disabled={actionLoading === item._id || reachedRenewalLimit}
+                                                            onClick={() => {
+                                                                if (reachedRenewalLimit) {
+                                                                    setError(`Bạn đã dùng hết số lần gia hạn (${maxRenewals}).`);
+                                                                    return;
+                                                                }
+                                                                void runAction(item._id, () => borrowingService.renewBorrowing(item._id), "Gia hạn thành công.");
+                                                            }}
+                                                            className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                                            title={reachedRenewalLimit ? `Đã đạt giới hạn gia hạn (${maxRenewals})` : `Đã gia hạn ${renewalCount}/${maxRenewals}`}
                                                         >
-                                                            Gia hạn
+                                                            {reachedRenewalLimit
+                                                                ? `Hết lượt (${renewalCount}/${maxRenewals})`
+                                                                : `Gia hạn +${RENEWAL_DAYS} ngày (${renewalCount}/${maxRenewals})`}
                                                         </button>
                                                     )}
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

@@ -9,7 +9,17 @@ export interface GetReservationsParams {
     userId?: string;
 }
 
+export interface CreateReservationInput {
+    bookId: string;
+    libraryId: string;
+}
+
 export const reservationService = {
+    createReservation: async (data: CreateReservationInput): Promise<IReservation> => {
+        const response = await api.post<ApiResponse<IReservation>>("/reservations", data);
+        return response.data.data;
+    },
+
     getReservations: async (params: GetReservationsParams = {}) => {
         const response = await api.get<ApiResponse<IReservation[]>>("/reservations", { params });
         return {

@@ -80,6 +80,9 @@ export interface IBorrowing {
     status: "pending" | "borrowed" | "returned" | "overdue";
     fineAmount: number;
     isFined: boolean;
+    finePaid?: boolean;
+    renewalCount?: number;
+    maxRenewals?: number;
     notes?: string;
     overdueDays?: number;
     createdAt: string;

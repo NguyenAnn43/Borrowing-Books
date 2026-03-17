@@ -4,15 +4,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import BookDetailView from "@/app/dashboard/books/page_book_detail";
 import { bookService } from "@/services/bookService";
+import { reservationService } from "@/services/reservationService";
+import { useAuthStore } from "@/stores/authStore";
 import type { IBook } from "@/types";
 
 export default function BookDetailPage() {
+  const { user, isAuthenticated } = useAuthStore();
   const params = useParams<{ bookId: string }>();
   const bookId = useMemo(() => params?.bookId ?? "", [params?.bookId]);
 
   const [book, setBook] = useState<IBook | null>(null);
   const [recommendations, setRecommendations] = useState<IBook[]>([]);
   const [recommendationType, setRecommendationType] = useState<"alternatives" | "related">("related");
+  const [isReserving, setIsReserving] = useState(false);
+  const [reserveMessage, setReserveMessage] = useState("");
+  const [reserveError, setReserveError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -30,6 +36,8 @@ export default function BookDetailPage() {
       try {
         const selectedBook = await bookService.getBookById(bookId);
         setBook(selectedBook);
+        setReserveMessage("");
+        setReserveError("");
 
         const alternatives = await bookService.getBookAlternatives(bookId);
 
@@ -60,5 +68,55 @@ export default function BookDetailPage() {
     void fetchBookDetail();
   }, [bookId]);
 
-  return <BookDetailView book={book} recommendations={recommendations} recommendationType={recommendationType} loading={loading} error={error} />;
+  const handleReserve = async () => {
+    if (!book) return;
+
+    setReserveError("");
+    setReserveMessage("");
+
+    if (!isAuthenticated || !user || user.role === "guest") {
+      setReserveError("Vui lòng đăng nhập tài khoản người dùng để đặt trước.");
+      return;
+    }
+
+    if (user.role !== "user") {
+      setReserveError("Chỉ tài khoản bạn đọc mới có thể tạo yêu cầu đặt trước.");
+      return;
+    }
+
+    if (book.availableCopies > 0) {
+      setReserveError("Sách hiện còn sẵn, vui lòng mượn trực tiếp thay vì đặt trước.");
+      return;
+    }
+
+    setIsReserving(true);
+    try {
+      await reservationService.createReservation({
+        bookId: book._id,
+        libraryId: book.libraryId._id,
+      });
+      setReserveMessage("Đã tạo yêu cầu đặt trước. Bạn có thể theo dõi trong mục Đặt trước của tôi.");
+    } catch (reserveActionError) {
+      const message = reserveActionError instanceof Error
+        ? reserveActionError.message
+        : "Không thể tạo đặt trước. Vui lòng thử lại.";
+      setReserveError(message);
+    } finally {
+      setIsReserving(false);
+    }
+  };
+
+  return (
+    <BookDetailView
+      book={book}
+      recommendations={recommendations}
+      recommendationType={recommendationType}
+      loading={loading}
+      error={error}
+      onReserve={handleReserve}
+      reserveLoading={isReserving}
+      reserveMessage={reserveMessage}
+      reserveError={reserveError}
+    />
+  );
 }

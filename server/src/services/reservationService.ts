@@ -90,6 +90,15 @@ export const createReservation = async (userId: string, data: CreateReservationI
     const book = await Book.findById(bookId) as IBook | null;
     if (!book) throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
 
+    // Real-world flow: reservation is only for books that are currently unavailable.
+    if (book.availableCopies > 0) {
+        throw new AppError(
+            'Book is currently available. Please borrow directly instead of reserving.',
+            400,
+            'BOOK_AVAILABLE_FOR_BORROWING'
+        );
+    }
+
     if (book.libraryId.toString() !== libraryId) {
         throw new AppError('The provided libraryId does not match the book\'s library', 400, 'LIBRARY_MISMATCH');
     }
