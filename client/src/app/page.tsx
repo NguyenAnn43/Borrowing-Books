@@ -538,7 +538,6 @@ export default function HomePage() {
                             📚 {book.libraryId?.name || "Không xác định thư viện"}
                             {book.libraryId?.code ? ` (${book.libraryId.code})` : ""}
                           </p>
-                          <div className="mt-2 flex items-center gap-1">
                           <div className="mt-2 flex items-center justify-between gap-2">
                             <span
                               className={`text-xs font-semibold px-2 py-1 rounded-full ${

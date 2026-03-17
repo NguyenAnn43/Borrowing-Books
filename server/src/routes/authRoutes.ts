@@ -8,6 +8,7 @@ import {
 	refreshTokenSchema,
 	requestRegisterOtpSchema,
 	verifyRegisterOtpSchema,
+	changePasswordSchema,
 } from '../validators';
 
 const router: IRouter = Router();
