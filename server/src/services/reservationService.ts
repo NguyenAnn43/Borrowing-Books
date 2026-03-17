@@ -241,3 +241,79 @@ export const expireReservations = async (): Promise<number> => {
     );
     return result.modifiedCount;
 };
+
+/**
+ * Auto-fulfill pending reservations when a book becomes available.
+ * Called after a book is returned.
+ * 
+ * Finds the earliest PENDING reservation for a given book (FIFO),
+ * creates a Borrowing record, and marks the reservation as COMPLETED.
+ * 
+ * @param bookId - The book ID to process reservations for
+ * @returns The updated reservation if one was fulfilled, or null if none exist
+ */
+export const autoFulfillNextReservation = async (bookId: string): Promise<IReservation | null> => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Find the earliest PENDING reservation for this book
+        const reservation = await Reservation.findOne({
+            bookId,
+            status: RESERVATION_STATUS.PENDING,
+        }).sort({ reservationDate: 1 }).session(session) as IReservation | null;
+
+        if (!reservation) {
+            await session.commitTransaction();
+            return null;
+        }
+
+        // Check if book still has available copies
+        const book = await Book.findById(bookId).session(session) as IBook | null;
+        if (!book || book.availableCopies <= 0) {
+            await session.commitTransaction();
+            return null;
+        }
+
+        // Decrement stock atomically
+        await bookService.decrementAvailabilityAtomic(toId(reservation.bookId), session);
+
+        // Create borrowing record with BORROWED status
+        const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
+        const borrowingDocs = await Borrowing.create([{
+            userId: reservation.userId,
+            bookId: reservation.bookId,
+            libraryId: reservation.libraryId,
+            dueDate,
+            status: BORROWING_STATUS.BORROWED,
+            borrowDate: new Date(),
+        }], { session }) as IBorrowing[];
+        const borrowing = borrowingDocs[0];
+
+        if (!borrowing) {
+            throw new AppError('Failed to create borrowing', 500, 'BORROWING_CREATE_FAILED');
+        }
+
+        // Mark reservation as COMPLETED and link to borrowing
+        reservation.status = RESERVATION_STATUS.COMPLETED;
+        reservation.borrowingId = borrowing._id;
+        await reservation.save({ session });
+
+        await session.commitTransaction();
+
+        // Send notifications outside transaction
+        await notificationService.create({
+            userId: toId(reservation.userId),
+            title: 'Your Book is Ready',
+            message: `Your reserved book is ready for pickup. Due date: ${dueDate.toLocaleDateString('vi-VN')}`,
+            type: NOTIFICATION_TYPE.RESERVATION,
+        });
+
+        return reservation;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
+    }
+};

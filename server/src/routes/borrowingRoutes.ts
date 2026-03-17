@@ -20,8 +20,8 @@ router.post(
     borrowingController.createBorrowing
 );
 
-/** DELETE /borrowings/:id/cancel — owner cancels a PENDING request */
-router.delete(
+/** PUT /borrowings/:id/cancel — owner cancels a PENDING request */
+router.put(
     '/:id/cancel',
     protect,
     validate(updateBorrowingSchema),
