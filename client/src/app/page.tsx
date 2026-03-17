@@ -1,225 +1,500 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui";
-import { BookOpen, Shield, ArrowRight, Search, Globe, Clock, CheckCircle2 } from "lucide-react";
+import { bookService } from "@/services/bookService";
+import type { IBook } from "@/types";
+
+const FALLBACK_COVER =
+  "https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=900&auto=format&fit=crop";
+
+const CATEGORY_STYLE_POOL = [
+  { icon: "auto_stories", bg: "bg-gradient-to-br from-[#2b6cee] to-[#1e4cba]" },
+  { icon: "terminal", bg: "bg-gradient-to-br from-[#0f172a] to-[#1a2542]" },
+  { icon: "biotech", bg: "bg-gradient-to-br from-[#065f46] to-[#064e3b]" },
+  { icon: "palette", bg: "bg-gradient-to-br from-[#9d174d] to-[#831843]" },
+];
+
+interface UICategory {
+  name: string;
+  count: number;
+  icon: string;
+  bg: string;
+}
+
+const BookSkeleton = () => (
+  <div className="min-w-48 max-w-48 animate-pulse">
+    <div className="aspect-[3/4] w-full rounded-xl bg-gray-300 dark:bg-gray-700" />
+    <div className="mt-3 space-y-2 px-1">
+      <div className="h-4 w-full rounded bg-gray-300 dark:bg-gray-700" />
+      <div className="h-3 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+      <div className="h-3 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
+    </div>
+  </div>
+);
+
+const CategorySkeleton = () => (
+  <div className="h-40 animate-pulse rounded-xl bg-gradient-to-br from-gray-300 to-gray-200 dark:from-gray-700 dark:to-gray-600" />
+);
+
+const formatCategoryCount = (count: number): string => {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k+ titles`;
+  }
+  return `${count}+ titles`;
+};
+
+const normalizeCategory = (value?: string): string => {
+  if (!value) return "Others";
+  const trimmed = value.trim();
+  if (!trimmed) return "Others";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+};
+
+const HEADER_NAV_ITEMS = [
+  { label: "Home", href: "/" },
+  { label: "Browse", href: "#browse" },
+  { label: "Libraries", href: "#libraries" },
+  { label: "About", href: "#about" },
+];
+
+const FOOTER_LINK_SECTIONS = [
+  {
+    title: "Services",
+    links: [
+      { label: "E-Books", href: "/dashboard/books" },
+      { label: "Audiobooks", href: "/dashboard/books" },
+      { label: "Local Events", href: "#about" },
+    ],
+  },
+  {
+    title: "Platform",
+    links: [
+      { label: "For Librarians", href: "/login" },
+      { label: "API Access", href: "/login" },
+      { label: "Mobile App", href: "/register" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About Us", href: "#about" },
+      { label: "Support", href: "mailto:support@mosa-library.local" },
+      { label: "Contact", href: "mailto:contact@mosa-library.local" },
+    ],
+  },
+];
+
+const FOOTER_SOCIAL_LINKS = [
+  { icon: "public", href: "/" },
+  { icon: "rss_feed", href: "#browse" },
+  { icon: "alternate_email", href: "mailto:contact@mosa-library.local" },
+];
 
 export default function HomePage() {
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden selection:bg-blue-100 selection:text-blue-900">
-      {/* Background Ambience - Light Mode */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] right-[-5%] w-[50%] h-[50%] bg-blue-100/50 rounded-full blur-[100px] mix-blend-multiply" />
-        <div className="absolute bottom-[-10%] left-[-5%] w-[50%] h-[50%] bg-indigo-100/50 rounded-full blur-[100px] mix-blend-multiply" />
-      </div>
+  const [books, setBooks] = useState<IBook[]>([]);
+  const [allBooks, setAllBooks] = useState<IBook[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState<string>("");
+  const [isLoadingBooks, setIsLoadingBooks] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [error, setError] = useState<string>("");
 
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/60 sticky-nav">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-2 rounded-xl shadow-lg shadow-blue-500/20">
-                <BookOpen className="h-6 w-6 text-white" />
+  const loadBooks = useCallback(async (nextQuery = "", nextCategory = "") => {
+    setIsLoadingBooks(true);
+    setError("");
+
+    try {
+      const [{ books: featuredBooks }, { books: categorySourceBooks }] = await Promise.all([
+        bookService.getBooks({
+          page: 1,
+          limit: 6,
+          q: nextQuery || undefined,
+          category: nextCategory || undefined,
+          status: "available",
+        }),
+        bookService.getBooks({
+          page: 1,
+          limit: 100,
+          q: nextQuery || undefined,
+          status: "available",
+        }),
+      ]);
+
+      setBooks(featuredBooks);
+      setAllBooks(categorySourceBooks);
+    } catch {
+      setError("Không tải được dữ liệu sách. Vui lòng thử lại.");
+      setBooks([]);
+      setAllBooks([]);
+    } finally {
+      setIsLoadingBooks(false);
+      setIsLoadingCategories(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBooks();
+  }, [loadBooks]);
+
+  const categories = useMemo<UICategory[]>(() => {
+    const counts = new Map<string, number>();
+
+    allBooks.forEach((book) => {
+      const normalizedCategory = normalizeCategory(book.category);
+      counts.set(normalizedCategory, (counts.get(normalizedCategory) || 0) + 1);
+    });
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([name, count], index) => ({
+        name,
+        count,
+        icon: CATEGORY_STYLE_POOL[index % CATEGORY_STYLE_POOL.length].icon,
+        bg: CATEGORY_STYLE_POOL[index % CATEGORY_STYLE_POOL.length].bg,
+      }));
+  }, [allBooks]);
+
+  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedQuery = searchText.trim();
+    setQuery(normalizedQuery);
+    await loadBooks(normalizedQuery, activeCategory);
+  };
+
+  const handleCategoryClick = async (categoryName: string) => {
+    const normalized = activeCategory === categoryName ? "" : categoryName;
+    setActiveCategory(normalized);
+    await loadBooks(query, normalized);
+  };
+
+  return (
+    <div className="min-h-screen overflow-x-hidden bg-[#f6f6f8] text-[#111318] transition-colors duration-200 dark:bg-[#101622] dark:text-white">
+      <style jsx global>{`
+        @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap");
+        @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
+
+        .material-symbols-outlined {
+          font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        }
+
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out forwards;
+        }
+
+        .animation-delay-200 {
+          animation-delay: 0.2s;
+        }
+      `}</style>
+
+      <div className="mx-auto w-full max-w-[1200px]">
+        <header className="flex items-center justify-between border-b border-[#f0f2f4] bg-white px-6 py-3 shadow-sm transition-shadow duration-300 dark:border-gray-800 dark:bg-[#101622] md:px-10">
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-4 text-[#2b6cee] transition-transform duration-300 hover:scale-105">
+              <div className="size-6">
+                <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z"
+                    fill="currentColor"
+                  />
+                </svg>
               </div>
-              <span className="text-xl font-bold tracking-tight text-slate-900">
-                Borrowing<span className="text-blue-600">Books</span>
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <Link href="/login" className="hidden sm:block">
-                <Button variant="ghost" className="text-slate-600 hover:text-blue-600 hover:bg-blue-50 font-medium">
-                  Đăng nhập
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button variant="primary" className="rounded-full px-6 shadow-md hover:shadow-lg transition-all bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 border-none">
-                  Bắt đầu ngay
-                </Button>
+              <Link href="/" className="text-xl font-extrabold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white">
+                Mosa
               </Link>
             </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="relative z-10 pt-40 pb-32 px-6 lg:px-8">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 text-blue-700 text-sm font-semibold mb-8 shadow-sm hover:shadow-md transition-shadow cursor-default animate-fade-in-up">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600"></span>
-            </span>
-            Hệ thống thư viện thông minh 2.0
+            <nav className="hidden items-center gap-9 md:flex">
+              {HEADER_NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.label}
+                  className="text-sm font-semibold leading-normal text-[#111318] transition-all duration-300 hover:text-[#2b6cee] dark:text-gray-200"
+                  href={item.href}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
           </div>
 
-          <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.15]">
-            Khám phá tri thức <br />
-            <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent pb-2">
-              Không giới hạn
-            </span>
-          </h1>
+          <div className="flex flex-1 items-center justify-end gap-4 md:gap-6">
+            <label className="hidden h-10 min-w-40 max-w-64 flex-col lg:flex">
+              <form className="flex h-full w-full flex-1 items-stretch rounded-lg" onSubmit={handleSearch}>
+                <div className="flex items-center justify-center rounded-l-lg border-r-0 bg-gray-100 pl-4 text-[#616f89] transition-colors duration-300 dark:bg-gray-800">
+                  <span className="material-symbols-outlined text-xl">search</span>
+                </div>
+                <input
+                  className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-l-none border-none border-l-0 bg-gray-100 px-4 pl-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-none focus:outline-0 focus:ring-0 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-700"
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Quick search..."
+                />
+              </form>
+            </label>
 
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-12 leading-relaxed font-medium">
-            Kết nối hàng ngàn thư viện, quản lý việc mượn trả sách dễ dàng và thông minh hơn bao giờ hết. Trải nghiệm ngay hôm nay.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link href="/books" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto rounded-full px-8 h-14 text-lg bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/20 text-white font-semibold transition-all hover:scale-105 border-0">
-                <Search className="mr-2 h-5 w-5" />
-                Tìm sách ngay
-              </Button>
+            <Link href="/login" className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#2b6cee] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:bg-blue-700 hover:shadow-lg active:scale-95 dark:hover:bg-blue-600">
+              <span className="truncate">Sign In</span>
             </Link>
-            <Link href="/register" className="w-full sm:w-auto">
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto rounded-full px-8 h-14 text-lg border-slate-200 text-slate-700 hover:bg-white hover:text-blue-600 hover:border-blue-200 shadow-sm hover:shadow-md transition-all bg-white"
-              >
-                Tạo tài khoản
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
+
+            <Link
+              className="size-10 overflow-hidden rounded-full border border-gray-200 bg-cover bg-center bg-no-repeat transition-all duration-300 hover:ring-2 hover:ring-[#2b6cee] hover:ring-offset-2 dark:border-gray-700 dark:hover:ring-offset-[#101622]"
+              style={{
+                backgroundImage:
+                  'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQhrvkpn7QIkSQrWD6ryk8-VjcLjjdfyBeE4MTZoL8wPCzy0f7NGQsTUQyRBxEXN5a1RtksfJFs3JP6KDlMnwX2ilQwOkEDreem4zWAIk6K4ja2AiLsC8X1l9kw69nbSiajR8kROHyMMSV6PxWZpVNXKK_AGL3gUsizt3p0fU6ZJx7G1w3LDWDBELQlyMdAB3jSth93Y-X6b3igC_x4s7UYAIbi8oZHg0lqng5pXU-9-Rr9ZVu2mHgntW_Vr1Ablp0pjEo7RowVb6x")',
+              }}
+              href="/register"
+              aria-label="Create account"
+            />
+          </div>
+        </header>
+
+        <section className="px-4 py-5 sm:px-6">
+          <div
+            className="relative flex min-h-[480px] flex-col items-center justify-center gap-6 overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat p-8 shadow-2xl sm:gap-8"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.7) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuAgMR0Oaf2igJ_zAb3fJagUcaFBFgfXNazzSjxcI5XW8lYKfWEEG5srRN186LtDeES9kZxw_WUmJ7OOQCjXMmlohYUfQviN0A_pvudzaFHJ9yQ5b_fHFcC1AcbD0tmB3j6HPi-Uh_LijnvZDbvw2SvTNz2UlUQxqfEjW4CTmw34F2RHhDlbIiSPFzY7Ble_zGs_JLYNjpv790X2LK_qyW2TuDjnRpf2ItnRy4qKXPYB9s-LviLGMN_R6s06RDgsegkEapJc2qV7MirH")',
+            }}
+          >
+            <div className="z-10 flex max-w-[720px] flex-col gap-4 text-center">
+              <h1 className="animate-fade-in text-4xl font-extrabold leading-tight tracking-[-0.033em] text-white sm:text-6xl">
+                Your gateway to world&apos;s knowledge.
+              </h1>
+              <h2 className="animate-fade-in animation-delay-200 mx-auto max-w-[500px] text-sm font-normal leading-relaxed text-white/90 sm:text-lg">
+                Access over 2 million titles from 500+ partnered local libraries. Borrow
+                digitally or reserve physical copies instantly.
+              </h2>
+            </div>
+
+            <form className="z-10 flex h-14 w-full max-w-[600px] flex-col shadow-2xl transition-all duration-300 sm:h-16" onSubmit={handleSearch}>
+              <div className="flex h-full w-full flex-1 items-stretch rounded-xl">
+                <div className="flex items-center justify-center rounded-l-xl border border-r-0 border-white/20 bg-white pl-[15px] text-[#616f89]">
+                  <span className="material-symbols-outlined">search</span>
+                </div>
+                <input
+                  className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl rounded-l-none rounded-r-none border border-l-0 border-r-0 border-white/20 bg-white px-[15px] pl-2 pr-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-white/30 focus:outline-0 focus:ring-0 sm:text-lg"
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Search by title, author, or ISBN"
+                />
+                <div className="flex items-center justify-center rounded-r-xl border border-l-0 border-white/20 bg-white pr-[7px]">
+                  <button
+                    className="flex h-10 min-w-[100px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-gradient-to-r from-[#2b6cee] to-[#1e4cba] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70 active:scale-95 sm:h-12 sm:px-6 sm:text-base"
+                    disabled={isLoadingBooks}
+                    type="submit"
+                  >
+                    <span className="truncate">{isLoadingBooks ? "Searching..." : "Search"}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section id="browse" className="py-5 scroll-mt-20">
+          <div className="flex items-center justify-between px-4 pb-3 pt-5">
+            <h2 className="text-2xl font-extrabold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white">
+              Most Borrowed Books
+            </h2>
+            <Link href="/dashboard/books" className="text-sm font-bold text-[#2b6cee] transition-colors hover:text-blue-700 dark:hover:text-blue-400">
+              View All
             </Link>
           </div>
 
-          <div className="mt-16 flex items-center justify-center gap-8 text-sm text-slate-500 font-medium">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
-              Miễn phí đăng ký
+          {error && (
+            <div className="mx-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              ⚠️ {error}
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
-              Hỗ trợ 24/7
-            </div>
-            <div className="flex items-center gap-2 hidden sm:flex">
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
-              Đa nền tảng
-            </div>
-          </div>
-        </div>
-      </section>
+          )}
 
-      {/* Features Grid */}
-      <section className="relative z-10 py-32 px-6 lg:px-8 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-24">
-            <h2 className="text-4xl font-bold text-slate-900 mb-6">Tính năng vượt trội</h2>
-            <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Được thiết kế tỉ mỉ để tối ưu hóa trải nghiệm của bạn, mang lại sự thuận tiện và hiệu quả chưa từng có.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <FeatureCard
-              icon={<Search className="w-6 h-6 text-blue-600" />}
-              title="Tìm kiếm thông minh"
-              description="Công cụ tìm kiếm mạnh mẽ với bộ lọc chuyên sâu giúp bạn tìm thấy cuốn sách mong muốn trong tích tắc."
-              color="bg-blue-50"
-              delay={0}
-            />
-            <FeatureCard
-              icon={<Globe className="w-6 h-6 text-indigo-600" />}
-              title="Mạng lưới rộng lớn"
-              description="Kết nối liên thông với hàng chục thư viện đối tác, mở rộng kho tri thức của bạn không giới hạn."
-              color="bg-indigo-50"
-              delay={100}
-            />
-            <FeatureCard
-              icon={<Clock className="w-6 h-6 text-purple-600" />}
-              title="Quản lý thời gian"
-              description="Hệ thống tự động nhắc nhở lịch trả sách, hỗ trợ gia hạn trực tuyến chỉ với một cú click."
-              color="bg-purple-50"
-              delay={200}
-            />
-            <FeatureCard
-              icon={<Shield className="w-6 h-6 text-emerald-600" />}
-              title="Bảo mật tuyệt đối"
-              description="Công nghệ mã hóa tiên tiến đảm bảo dữ liệu cá nhân và lịch sử đọc sách của bạn luôn an toàn."
-              color="bg-emerald-50"
-              delay={300}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="relative z-10 py-24 px-6 lg:px-8 bg-slate-50 overflow-hidden">
-        <div className="absolute inset-0 z-0">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full blur-[100px] opacity-60" />
-        </div>
-
-        <div className="max-w-7xl mx-auto relative z-10">
-          <div className="bg-white/70 backdrop-blur-xl border border-white rounded-[2.5rem] p-12 lg:p-16 shadow-2xl shadow-blue-900/5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-12 lg:gap-16">
-              <StatItem value="10+" label="Đối tác thư viện" color="text-blue-600" />
-              <StatItem value="50K+" label="Đầu sách" color="text-indigo-600" />
-              <StatItem value="10K+" label="Độc giả" color="text-purple-600" />
-              <StatItem value="99%" label="Hài lòng" color="text-emerald-600" />
+          <div className="flex overflow-x-auto pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-stretch gap-6 px-4">
+              {isLoadingBooks
+                ? Array.from({ length: 6 }).map((_, i) => <BookSkeleton key={i} />)
+                : books.length === 0
+                  ? <div className="w-full py-12 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600">
+                          library_books
+                        </span>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Không có sách phù hợp</p>
+                      </div>
+                    </div>
+                  : books.map((book) => (
+                      <div
+                        key={book._id}
+                        className="group flex min-w-48 max-w-48 flex-col gap-3 rounded-lg transition-all duration-300 hover:scale-105"
+                      >
+                        <div
+                          className="aspect-[3/4] w-full overflow-hidden rounded-xl bg-gray-200 shadow-lg transition-all duration-300 group-hover:shadow-2xl dark:bg-gray-700"
+                          style={{
+                            backgroundImage: `url("${book.coverImage || FALLBACK_COVER}")`,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
+                          }}
+                        />
+                        <div className="px-1">
+                          <p
+                            className="line-clamp-1 text-base font-bold leading-tight text-[#111318] dark:text-white"
+                            title={book.title}
+                          >
+                            {book.title}
+                          </p>
+                          <p className="truncate text-sm font-medium leading-normal text-[#616f89] dark:text-gray-400">
+                            {book.author}
+                          </p>
+                          <div className="mt-2 flex items-center gap-1">
+                            <span
+                              className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                book.availableCopies > 0
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                  : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                              }`}
+                            >
+                              {book.availableCopies}/{book.totalCopies}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* CTA Section */}
-      <section className="py-24 px-6 lg:px-8 bg-white text-center">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6">Sẵn sàng bắt đầu hành trình đọc sách?</h2>
-          <p className="text-lg text-slate-600 mb-10">Tham gia cộng đồng hàng nghìn độc giả và mở khóa kho tàng tri thức vô tận ngay hôm nay.</p>
-          <Link href="/register">
-            <Button size="lg" className="rounded-full px-10 h-16 text-xl bg-slate-900 hover:bg-slate-800 text-white shadow-xl hover:shadow-2xl transition-all hover:scale-105 border-0">
-              Đăng ký miễn phí ngay
-            </Button>
-          </Link>
-        </div>
-      </section>
+        <section id="libraries" className="bg-white py-10 scroll-mt-20 dark:bg-[#101622]/50">
+          <h2 className="px-4 pb-6 text-2xl font-extrabold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white">
+            Featured Categories
+          </h2>
 
-      {/* Footer */}
-      <footer className="relative z-10 py-12 px-6 lg:px-8 border-t border-slate-200 bg-slate-50">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-1.5 rounded-lg">
-              <BookOpen className="h-4 w-4 text-white" />
+          <div className="grid grid-cols-2 gap-6 px-4 md:grid-cols-4">
+            {isLoadingCategories
+              ? Array.from({ length: 4 }).map((_, i) => <CategorySkeleton key={i} />)
+              : categories.length === 0
+                ? <p className="col-span-2 text-center text-sm text-gray-500 dark:text-gray-400 md:col-span-4">
+                    Chưa có danh mục
+                  </p>
+                : categories.map((category) => (
+                    <button
+                      key={category.name}
+                      type="button"
+                      onClick={() => void handleCategoryClick(category.name)}
+                      className={`group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 ${
+                        activeCategory === category.name ? "ring-2 ring-offset-2 ring-[#2b6cee] dark:ring-offset-[#101622]" : ""
+                      } hover:shadow-xl`}
+                    >
+                      <div
+                        className={`absolute inset-0 transition-all duration-300 ${category.bg} ${
+                          activeCategory === category.name ? "opacity-100" : "opacity-80 group-hover:opacity-95"
+                        }`}
+                      />
+                      <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
+                        <span className="material-symbols-outlined text-9xl text-white">{category.icon}</span>
+                      </div>
+                      <div className="z-10 space-y-1">
+                        <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">
+                          {category.icon}
+                        </span>
+                        <p className="text-lg font-bold text-white">{category.name}</p>
+                        <p className="text-sm text-white/80">{formatCategoryCount(category.count)}</p>
+                      </div>
+                    </button>
+                  ))}
+          </div>
+        </section>
+
+        <footer id="about" className="border-t border-[#f0f2f4] bg-white py-10 scroll-mt-20 shadow-sm dark:border-gray-800 dark:bg-[#101622]">
+          <div className="px-6 md:px-10">
+            <div className="flex flex-col items-start justify-between gap-10 md:flex-row">
+              <div className="flex max-w-xs flex-col gap-4">
+                <div className="flex items-center gap-3 text-[#2b6cee] transition-transform duration-300 hover:scale-105">
+                  <div className="size-5">
+                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                      <path
+                        d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </div>
+                  <h2 className="text-lg font-bold">Mosa Library</h2>
+                </div>
+                <p className="text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                  Modernizing the way we explore knowledge. Connecting libraries,
+                  readers, and stories across the globe.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-12 sm:grid-cols-3">
+                {FOOTER_LINK_SECTIONS.map((section) => (
+                  <div key={section.title} className="flex flex-col gap-4">
+                    <h4 className="text-sm font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                      {section.title}
+                    </h4>
+                    {section.links.map((link) => (
+                      link.href.startsWith("mailto:")
+                        ? (
+                            <a
+                              key={link.label}
+                              className="text-sm font-medium text-gray-600 transition-colors duration-300 hover:text-[#2b6cee] dark:text-gray-400 dark:hover:text-blue-400"
+                              href={link.href}
+                            >
+                              {link.label}
+                            </a>
+                          )
+                        : (
+                            <Link
+                              key={link.label}
+                              className="text-sm font-medium text-gray-600 transition-colors duration-300 hover:text-[#2b6cee] dark:text-gray-400 dark:hover:text-blue-400"
+                              href={link.href}
+                            >
+                              {link.label}
+                            </Link>
+                          )
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
-            <span className="text-slate-700 font-bold">Borrowing Books</span>
-          </div>
-          <div className="flex gap-8 text-sm text-slate-500">
-            <Link href="#" className="hover:text-blue-600 transition-colors">Điều khoản</Link>
-            <Link href="#" className="hover:text-blue-600 transition-colors">Bảo mật</Link>
-            <Link href="#" className="hover:text-blue-600 transition-colors">Liên hệ</Link>
-          </div>
-          <p className="text-slate-400 text-sm font-medium">
-            © 2026 Library System.
-          </p>
-        </div>
-      </footer>
-    </div>
-  );
-}
 
-function FeatureCard({ icon, title, description, color, delay }: { icon: React.ReactNode, title: string, description: string, color: string, delay: number }) {
-  return (
-    <div
-      className="group p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:border-blue-100 hover:bg-white hover:shadow-xl hover:shadow-blue-900/5 transition-all duration-300 hover:-translate-y-2 relative overflow-hidden"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className={`w-14 h-14 rounded-2xl ${color} flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-300`}>
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
-      <p className="text-slate-600 leading-relaxed text-base font-medium">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function StatItem({ value, label, color }: { value: string, label: string, color: string }) {
-  return (
-    <div className="text-center group cursor-default">
-      <div className={`text-4xl md:text-5xl font-extrabold ${color} mb-3 group-hover:scale-110 transition-transform duration-300 inline-block`}>
-        {value}
-      </div>
-      <div className="text-slate-500 font-semibold uppercase tracking-wider text-sm">
-        {label}
+            <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-gray-100 pt-8 dark:border-gray-800 md:flex-row">
+              <p className="text-xs text-gray-400">© 2024 Mosa Library Systems. All rights reserved.</p>
+              <div className="flex gap-6">
+                {FOOTER_SOCIAL_LINKS.map((item) => (
+                  item.href.startsWith("mailto:")
+                    ? (
+                        <a
+                          key={item.icon}
+                          className="text-gray-400 transition-all duration-300 hover:scale-110 hover:text-[#2b6cee] dark:hover:text-blue-400"
+                          href={item.href}
+                        >
+                          <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                        </a>
+                      )
+                    : (
+                        <Link
+                          key={item.icon}
+                          className="text-gray-400 transition-all duration-300 hover:scale-110 hover:text-[#2b6cee] dark:hover:text-blue-400"
+                          href={item.href}
+                        >
+                          <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                        </Link>
+                      )
+                ))}
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
