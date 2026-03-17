@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, Home } from "lucide-react";
+import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, ShoppingCart, Home } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 import { RouteGuard } from "@/components/RouteGuard";
 
 const roleLabel: Record<string, string> = {
@@ -22,6 +23,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const router = useRouter();
     const pathname = usePathname();
     const { user, logout } = useAuthStore();
+    const cartItems = useCartStore((state) => state.items);
 
     const handleLogout = async () => {
         await logout();
@@ -45,20 +47,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ? [
                 { href: "/dashboard/borrowings", label: "Mượn của tôi", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
-                                { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
-              ]
+                { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
+                { href: "/dashboard/cart", label: "Giỏ sách", icon: ShoppingCart },
+            ]
             : []),
-                ...(user?.role === "librarian"
+        ...(user?.role === "librarian"
             ? [
                 { href: "/dashboard/borrowings", label: "Quản lý mượn/trả", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
-              ]
+            ]
             : []),
         ...(user?.role === "admin"
             ? [
                 { href: "/dashboard/users", label: "Người dùng", icon: Users },
                 { href: "/dashboard/libraries", label: "Thư viện", icon: Library },
-              ]
+            ]
             : []),
         { href: "/dashboard/profile", label: "Hồ sơ cá nhân", icon: UserRound },
         { href: "/dashboard/notifications", label: "Thông báo", icon: Bell },
@@ -116,15 +119,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                                        active
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative ${active
                                             ? "bg-blue-600/20 text-blue-300 border border-blue-500/30"
                                             : "text-slate-400 hover:text-white hover:bg-white/5"
-                                    }`}
+                                        }`}
                                 >
                                     <Icon className="h-4 w-4 flex-shrink-0" />
                                     <span>{item.label}</span>
-                                    {active && <ChevronRight className="h-3 w-3 ml-auto text-blue-400" />}
+                                    {item.href === "/dashboard/cart" && cartItems.length > 0 && (
+                                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+                                            {cartItems.length}
+                                        </span>
+                                    )}
+                                    {active && item.href !== "/dashboard/cart" && <ChevronRight className="h-3 w-3 ml-auto text-blue-400" />}
                                 </Link>
                             );
                         })}

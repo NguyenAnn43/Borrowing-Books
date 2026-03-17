@@ -55,6 +55,14 @@ export const borrowingService = {
     },
 
     /**
+     * Create bulk borrowing request
+     */
+    createBulkBorrowing: async (data: { bookIds: string[]; libraryId: string; notes?: string }): Promise<IBorrowing[]> => {
+        const response = await api.post<ApiResponse<IBorrowing[]>>("/borrowings/bulk", data);
+        return response.data.data;
+    },
+
+    /**
      * Confirm book pickup (librarian)
      */
     confirmPickup: async (id: string): Promise<IBorrowing> => {

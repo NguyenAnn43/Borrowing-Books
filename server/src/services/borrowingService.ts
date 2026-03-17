@@ -7,7 +7,7 @@ import {
     BORROWING_STATUS, BORROWING_SETTINGS, PAGINATION, NOTIFICATION_TYPE,
 } from '../utils';
 import { IBorrowing, IBook, IUser, PaginationMeta } from '../types';
-import { GetBorrowingsQuery, CreateBorrowingInput } from '../validators/borrowingSchema';
+import { GetBorrowingsQuery, CreateBorrowingInput, CreateBulkBorrowingInput } from '../validators/borrowingSchema';
 import { ROLES } from '../utils/constants';
 
 interface GetBorrowingsResult {
@@ -149,6 +149,95 @@ export const createBorrowing = async (userId: string, data: CreateBorrowingInput
     });
 
     return borrowing;
+};
+
+/**
+ * Create bulk borrowing request for multiple books at once.
+ */
+export const createBulkBorrowing = async (userId: string, data: CreateBulkBorrowingInput): Promise<IBorrowing[]> => {
+    const { bookIds, libraryId, notes } = data;
+
+    // Remove duplicate book IDs if any
+    const uniqueBookIds = [...new Set(bookIds)];
+
+    const user = await User.findById(userId) as IUser | null;
+    if (!user) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+
+    const activeBorrowingsCount = await Borrowing.countDocuments({
+        userId,
+        status: { $in: [BORROWING_STATUS.PENDING, BORROWING_STATUS.BORROWED] },
+    });
+
+    if (activeBorrowingsCount + uniqueBookIds.length > user.maxBorrowLimit) {
+        throw new AppError(
+            `Bulk request exceeds your borrow limit. You can only borrow ${user.maxBorrowLimit - activeBorrowingsCount} more book(s).`,
+            400,
+            'BORROW_LIMIT_REACHED'
+        );
+    }
+
+    const books = await Book.find({ _id: { $in: uniqueBookIds } }) as IBook[];
+    if (books.length !== uniqueBookIds.length) {
+        throw new AppError('One or more books not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    // Validate all books
+    for (const book of books) {
+        if (book.libraryId.toString() !== libraryId) {
+            throw new AppError(
+                `Book "${book.title}" is not available at the selected library`,
+                400,
+                'LIBRARY_MISMATCH'
+            );
+        }
+        if (book.availableCopies <= 0) {
+            throw new AppError(`Book "${book.title}" is not available`, 400, 'BOOK_UNAVAILABLE');
+        }
+    }
+
+    const existingBorrowings = await Borrowing.find({
+        userId,
+        bookId: { $in: uniqueBookIds },
+        status: { $in: [BORROWING_STATUS.PENDING, BORROWING_STATUS.BORROWED] },
+    });
+
+    if (existingBorrowings.length > 0) {
+        throw new AppError('You already have one or more of these books borrowed or pending', 400, 'ALREADY_BORROWED');
+    }
+
+    const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
+    
+    const borrowingsToCreate = uniqueBookIds.map(bookId => ({
+        userId,
+        bookId,
+        libraryId,
+        dueDate,
+        notes,
+        status: BORROWING_STATUS.PENDING
+    }));
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    let borrowings: IBorrowing[];
+    try {
+        borrowings = await Borrowing.insertMany(borrowingsToCreate, { session }) as unknown as IBorrowing[];
+        await session.commitTransaction();
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+
+    await notificationService.create({
+        userId,
+        title: 'Bulk Borrowing Request Created',
+        message: `Your request to borrow ${borrowings.length} book(s) has been submitted.`,
+        type: NOTIFICATION_TYPE.BORROWING,
+    });
+
+    return borrowings;
 };
 
 /**

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { ShoppingCart } from "lucide-react";
 import type { IBook } from "@/types";
+import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 
 const FALLBACK_COVER =
   "https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=900&auto=format&fit=crop";
@@ -32,6 +35,9 @@ function BookCard({ book }: { book: IBook }) {
 }
 
 export default function BookDetailView({ book, recommendations, recommendationType = "related", loading, error }: BookDetailViewProps) {
+  const { user } = useAuthStore();
+  const cartStore = useCartStore();
+
   if (loading) {
     return (
       <main className="mx-auto w-full max-w-[1200px] px-6 py-10">
@@ -108,17 +114,38 @@ export default function BookDetailView({ book, recommendations, recommendationTy
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
-                book.availableCopies > 0
+              className={`rounded-full px-3 py-1 text-xs font-bold ${book.availableCopies > 0
                   ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                   : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-              }`}
+                }`}
             >
               {book.availableCopies > 0 ? "Available" : "Out of stock"} ({book.availableCopies}/{book.totalCopies})
             </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               Library: {book.libraryId?.name || "Không xác định"}
             </span>
+
+            {(user?.role === "user" || !user) && (
+              <button
+                type="button"
+                disabled={book.availableCopies <= 0}
+                onClick={() => {
+                  if (!user) {
+                    window.location.href = "/login";
+                    return;
+                  }
+                  return cartStore.isInCart(book._id) ? cartStore.removeFromCart(book._id) : cartStore.addToCart(book);
+                }}
+                className={`ml-auto inline-flex items-center gap-2 rounded-xl px-4 py-2 font-bold text-sm transition-all shadow-sm ${book.availableCopies <= 0 ? "bg-gray-200 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                    : cartStore.isInCart(book._id)
+                      ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
+                      : "bg-[#2b6cee] text-white hover:bg-blue-700 hover:shadow-md"
+                  }`}
+              >
+                <ShoppingCart className="h-4 w-4" />
+                {cartStore.isInCart(book._id) ? "Remove from Cart" : "Add to Cart"}
+              </button>
+            )}
           </div>
         </div>
       </section>
