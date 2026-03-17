@@ -16,6 +16,7 @@ export default function CartPage() {
     const { items, removeFromCart, clearCart } = useCartStore();
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
 
     // Group items by Library because books might belong to different libraries
     const itemsByLibrary = items.reduce((acc, item) => {
@@ -38,27 +39,84 @@ export default function CartPage() {
     const handleCheckout = async (libraryId: string, bookIds: string[]) => {
         setSubmitting(true);
         setError(null);
+        setSuccess(null);
         
         try {
+            const selectedItems = items.filter((item) => bookIds.includes(item.book._id));
+
+            const unavailableBooks = selectedItems.filter((item) => item.book.availableCopies <= 0);
+            const unavailableIds = new Set(unavailableBooks.map((item) => item.book._id));
+
+            const myBorrowings = await borrowingService.getMyBorrowings({ page: 1, limit: 200 });
+            const activeBookIds = new Set(
+                myBorrowings.borrowings
+                    .filter((borrowing) => borrowing.status === "pending" || borrowing.status === "borrowed")
+                    .map((borrowing) => borrowing.bookId?._id)
+                    .filter((id): id is string => Boolean(id))
+            );
+
+            const alreadyRequestedBooks = selectedItems.filter((item) => activeBookIds.has(item.book._id));
+            const alreadyRequestedIds = new Set(alreadyRequestedBooks.map((item) => item.book._id));
+
+            const eligibleBookIds = selectedItems
+                .filter((item) => !unavailableIds.has(item.book._id) && !alreadyRequestedIds.has(item.book._id))
+                .map((item) => item.book._id);
+
+            if (eligibleBookIds.length === 0) {
+                const reasons: string[] = [];
+                if (unavailableBooks.length > 0) {
+                    reasons.push(`${unavailableBooks.length} sách đã hết`);
+                }
+                if (alreadyRequestedBooks.length > 0) {
+                    reasons.push(`${alreadyRequestedBooks.length} sách đã có yêu cầu mượn trước đó`);
+                }
+                setError(
+                    reasons.length > 0
+                        ? `Không có sách hợp lệ để gửi yêu cầu (${reasons.join(", ")}).`
+                        : "Không có sách hợp lệ để gửi yêu cầu."
+                );
+                return;
+            }
+
             await borrowingService.createBulkBorrowing({
-                bookIds,
+                bookIds: eligibleBookIds,
                 libraryId,
             });
             
             // Remove the checked out items from cart
-            bookIds.forEach((id) => removeFromCart(id));
-            
-            // Show success message or redirect
-            alert("Tạo yêu cầu mượn sách thành công! Vui lòng chờ thư viện xác nhận.");
-            if (items.length === bookIds.length) {
+            eligibleBookIds.forEach((id) => removeFromCart(id));
+
+            const notices: string[] = [];
+            if (unavailableBooks.length > 0) {
+                notices.push(`${unavailableBooks.length} sách đã hết chưa được gửi`);
+            }
+            if (alreadyRequestedBooks.length > 0) {
+                notices.push(`${alreadyRequestedBooks.length} sách đã có yêu cầu trước đó chưa được gửi`);
+            }
+
+            setSuccess(
+                notices.length > 0
+                    ? `Đã gửi yêu cầu mượn ${eligibleBookIds.length} sách. (${notices.join("; ")})`
+                    : "Tạo yêu cầu mượn sách thành công! Vui lòng chờ thư viện xác nhận."
+            );
+
+            if (items.length === eligibleBookIds.length) {
                 // If cart is now empty, go to borrowings page
                 router.push("/dashboard/borrowings");
             }
         } catch (err: any) {
             console.error("Bulk borrowing error:", err.response?.data || err);
-            const errorMsg = err.response?.data?.error?.message 
-                             || err.response?.data?.message 
-                             || (err instanceof Error ? err.message : "Đã có lỗi xảy ra. Không thể tạo yêu cầu mượn sách.");
+            const errorCode = err.response?.data?.error?.code;
+            const fallbackByCode: Record<string, string> = {
+                BORROW_LIMIT_REACHED: "Bạn đã đạt giới hạn số lượng sách được mượn.",
+                ALREADY_BORROWED: "Một hoặc nhiều sách đã có yêu cầu mượn trước đó.",
+                BOOK_UNAVAILABLE: "Một hoặc nhiều sách đã hết trước khi gửi yêu cầu.",
+                LIBRARY_MISMATCH: "Giỏ có sách không cùng thư viện. Vui lòng gửi theo từng thư viện.",
+            };
+            const errorMsg = fallbackByCode[errorCode]
+                || err.response?.data?.error?.message
+                || err.response?.data?.message
+                || (err instanceof Error ? err.message : "Đã có lỗi xảy ra. Không thể tạo yêu cầu mượn sách.");
             setError(errorMsg);
         } finally {
             setSubmitting(false);
@@ -89,6 +147,11 @@ export default function CartPage() {
                 {error && (
                     <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                         {error}
+                    </div>
+                )}
+                {success && (
+                    <div className="mb-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                        {success}
                     </div>
                 )}
 
@@ -164,7 +227,7 @@ export default function CartPage() {
                                     </p>
                                     <button
                                         onClick={() => handleCheckout(group.libraryId, group.items.map(i => i.book._id))}
-                                        disabled={submitting || group.items.some(i => i.book.availableCopies <= 0)}
+                                        disabled={submitting || group.items.every(i => i.book.availableCopies <= 0)}
                                         className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2"
                                     >
                                         {submitting ? (
