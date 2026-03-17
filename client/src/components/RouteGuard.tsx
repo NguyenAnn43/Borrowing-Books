@@ -43,7 +43,7 @@ export function RouteGuard({ children, allowedRoles }: RouteGuardProps) {
     useEffect(() => {
         if (!isBootstrapped || isLoading) return;
 
-        if (!isAuthenticated || !user) {
+        if (!isAuthenticated || !user || user.role === "guest") {
             router.replace("/login");
             return;
         }
@@ -52,13 +52,12 @@ export function RouteGuard({ children, allowedRoles }: RouteGuardProps) {
             // Redirect về dashboard phù hợp với role
             if (user.role === "admin") router.replace("/dashboard/admin");
             else if (user.role === "librarian") router.replace("/dashboard/librarian");
-            else if (user.role === "guest") router.replace("/dashboard/guest");
             else router.replace("/dashboard/user");
         }
     }, [isAuthenticated, user, isLoading, isBootstrapped, allowedRoles, router]);
 
     // Đang tải hoặc chưa xác thực → hiện loading
-    if (!isBootstrapped || isLoading) {
+    if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-950">
                 <div className="flex flex-col items-center gap-4">
@@ -72,7 +71,7 @@ export function RouteGuard({ children, allowedRoles }: RouteGuardProps) {
         );
     }
 
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || user.role === "guest") {
         return null;
     }
 

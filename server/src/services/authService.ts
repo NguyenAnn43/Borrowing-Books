@@ -4,6 +4,11 @@ import { AppError } from '../utils';
 import config from '../config/env';
 import { IUser } from '../types';
 import { RegisterInput } from '../validators/authSchema';
+import {
+    requestRegisterOtp as requestRegisterOtpService,
+    verifyRegisterOtp as verifyRegisterOtpService,
+    consumeEmailVerification,
+} from './registerVerificationService';
 
 interface TokenPair {
     accessToken: string;
@@ -39,6 +44,8 @@ const generateTokens = (userId: string): TokenPair => {
  * Register a new user
  */
 export const register = async (userData: RegisterInput): Promise<AuthResult> => {
+    consumeEmailVerification(userData.email, userData.emailVerificationToken);
+
     // Check if email already exists
     const existingUser = await User.findOne({ email: userData.email });
     if (existingUser) {
@@ -46,7 +53,12 @@ export const register = async (userData: RegisterInput): Promise<AuthResult> => 
     }
 
     // Create user
-    const user = await User.create(userData) as IUser;
+    const user = await User.create({
+        email: userData.email,
+        password: userData.password,
+        fullName: userData.fullName,
+        phone: userData.phone,
+    }) as IUser;
 
     // Generate tokens
     const tokens = generateTokens(user._id.toString());
@@ -59,6 +71,28 @@ export const register = async (userData: RegisterInput): Promise<AuthResult> => 
         user,
         ...tokens,
     };
+};
+
+/**
+ * Request OTP code for register email verification
+ */
+export const requestRegisterOtp = async (email: string, requestIp?: string): Promise<{ expiresInSeconds: number }> => {
+    const existingUser = await User.findOne({ email: email.trim().toLowerCase() });
+    if (existingUser) {
+        throw new AppError('Email already registered', 400, 'EMAIL_EXISTS');
+    }
+
+    return requestRegisterOtpService(email, requestIp);
+};
+
+/**
+ * Verify OTP code for register email verification
+ */
+export const verifyRegisterOtp = async (
+    email: string,
+    otpCode: string
+): Promise<{ verificationToken: string; expiresInSeconds: number }> => {
+    return verifyRegisterOtpService(email, otpCode);
 };
 
 /**

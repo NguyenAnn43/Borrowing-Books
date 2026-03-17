@@ -118,9 +118,19 @@ export interface ILoginRequest {
 
 export interface IRegisterRequest {
     email: string;
+    emailVerificationToken: string;
     password: string;
     fullName: string;
     phone?: string;
+}
+
+export interface IRequestRegisterOtpResponse {
+    expiresInSeconds: number;
+}
+
+export interface IVerifyRegisterOtpResponse {
+    verificationToken: string;
+    expiresInSeconds: number;
 }
 
 export interface IAuthResponse {

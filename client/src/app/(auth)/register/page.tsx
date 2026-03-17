@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -8,6 +8,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BookOpen, Mail, Lock, Eye, EyeOff, User, Phone, BookMarked, Library } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import api from "@/lib/api";
+import type { ApiResponse } from "@/lib/api";
+import type { IRequestRegisterOtpResponse, IVerifyRegisterOtpResponse } from "@/types";
 
 const registerSchema = z
     .object({
@@ -35,25 +38,187 @@ export default function RegisterPage() {
     const { register: registerUser, isLoading, error, clearError } = useAuthStore();
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [otpCode, setOtpCode] = useState("");
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
+    const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+    const [isOtpSent, setIsOtpSent] = useState(false);
+    const [otpExpiresAt, setOtpExpiresAt] = useState<number | null>(null);
+    const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
+    const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
+    const [verifiedEmail, setVerifiedEmail] = useState("");
+    const [emailVerificationToken, setEmailVerificationToken] = useState("");
+    const [infoMessage, setInfoMessage] = useState<string | null>(null);
+    const [localError, setLocalError] = useState<string | null>(null);
 
     const {
         register,
         handleSubmit,
+        watch,
         formState: { errors },
     } = useForm<RegisterForm>({
         resolver: zodResolver(registerSchema),
     });
 
+    const emailValue = watch("email") || "";
+
+    useEffect(() => {
+        if (!verifiedEmail) return;
+        if (emailValue.trim().toLowerCase() !== verifiedEmail) {
+            setVerifiedEmail("");
+            setEmailVerificationToken("");
+            setOtpCode("");
+            setIsOtpSent(false);
+            setOtpExpiresAt(null);
+            setInfoMessage("Email da thay doi. Vui long xac thuc OTP lai truoc khi dang ky.");
+        }
+    }, [emailValue, verifiedEmail]);
+
+    useEffect(() => {
+        if (!otpExpiresAt) {
+            setOtpSecondsLeft(0);
+            return;
+        }
+
+        const intervalId = window.setInterval(() => {
+            const nextSeconds = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
+            setOtpSecondsLeft(nextSeconds);
+
+            if (nextSeconds === 0) {
+                setOtpExpiresAt(null);
+                setIsOtpSent(false);
+                setOtpCode("");
+                window.clearInterval(intervalId);
+            }
+        }, 1000);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [otpExpiresAt]);
+
+    useEffect(() => {
+        if (resendCooldownSeconds <= 0) return;
+
+        const intervalId = window.setInterval(() => {
+            setResendCooldownSeconds((prev) => {
+                if (prev <= 1) {
+                    window.clearInterval(intervalId);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [resendCooldownSeconds]);
+
+    const handleSendOtp = async () => {
+        clearError();
+        setLocalError(null);
+        setInfoMessage(null);
+
+        const normalizedEmail = emailValue.trim().toLowerCase();
+        if (resendCooldownSeconds > 0) {
+            setLocalError(`Vui long doi ${resendCooldownSeconds}s truoc khi gui lai OTP.`);
+            return;
+        }
+
+        if (!z.string().email().safeParse(normalizedEmail).success) {
+            setLocalError("Vui long nhap email hop le truoc khi gui ma OTP.");
+            return;
+        }
+
+        setIsSendingOtp(true);
+        try {
+            const response = await api.post<ApiResponse<IRequestRegisterOtpResponse>>(
+                "/auth/register/request-otp",
+                { email: normalizedEmail }
+            );
+            const expiresInSeconds = response.data.data.expiresInSeconds;
+            setIsOtpSent(true);
+            setOtpCode("");
+            setOtpExpiresAt(Date.now() + expiresInSeconds * 1000);
+            setOtpSecondsLeft(expiresInSeconds);
+            setResendCooldownSeconds(45);
+            setVerifiedEmail("");
+            setEmailVerificationToken("");
+            setInfoMessage("Da gui ma OTP toi email cua ban. Ma co hieu luc trong 5 phut.");
+        } catch (requestError) {
+            const retryAfterSeconds = (requestError as {
+                response?: { data?: { error?: { details?: { retryAfterSeconds?: number } } } }
+            })?.response?.data?.error?.details?.retryAfterSeconds;
+
+            if (typeof retryAfterSeconds === "number" && retryAfterSeconds > 0) {
+                setResendCooldownSeconds(retryAfterSeconds);
+            }
+
+            const message = (requestError as { response?: { data?: { error?: { message?: string }; message?: string } } })
+                ?.response?.data?.error?.message
+                || (requestError as { response?: { data?: { message?: string } } })?.response?.data?.message
+                || "Khong the gui OTP. Vui long thu lai.";
+            setLocalError(message);
+        } finally {
+            setIsSendingOtp(false);
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        clearError();
+        setLocalError(null);
+        setInfoMessage(null);
+
+        const normalizedEmail = emailValue.trim().toLowerCase();
+        if (!isOtpSent) {
+            setLocalError("Vui long gui OTP truoc khi xac thuc.");
+            return;
+        }
+
+        if (!/^\d{6}$/.test(otpCode)) {
+            setLocalError("Ma OTP phai gom 6 chu so.");
+            return;
+        }
+
+        setIsVerifyingOtp(true);
+        try {
+            const response = await api.post<ApiResponse<IVerifyRegisterOtpResponse>>(
+                "/auth/register/verify-otp",
+                { email: normalizedEmail, otpCode }
+            );
+            setVerifiedEmail(normalizedEmail);
+            setEmailVerificationToken(response.data.data.verificationToken);
+            setInfoMessage("Xac thuc email thanh cong. Ban co the dang ky ngay bay gio.");
+        } catch (verifyError) {
+            const message = (verifyError as { response?: { data?: { error?: { message?: string }; message?: string } } })
+                ?.response?.data?.error?.message
+                || (verifyError as { response?: { data?: { message?: string } } })?.response?.data?.message
+                || "Ma OTP khong dung hoac da het han.";
+            setLocalError(message);
+        } finally {
+            setIsVerifyingOtp(false);
+        }
+    };
+
     const onSubmit = async (data: RegisterForm) => {
         clearError();
+        setLocalError(null);
+
+        const normalizedEmail = data.email.trim().toLowerCase();
+        if (!emailVerificationToken || verifiedEmail !== normalizedEmail) {
+            setLocalError("Vui long xac thuc email bang OTP truoc khi dang ky.");
+            return;
+        }
+
         try {
             await registerUser({
                 email: data.email,
+                emailVerificationToken,
                 password: data.password,
                 fullName: data.fullName,
                 phone: data.phone,
             });
-            router.push("/dashboard/user");
+            router.push("/");
         } catch {
             // Error is handled in store
         }
@@ -95,6 +260,25 @@ export default function RegisterPage() {
                     </p>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                        {localError && (
+                            <div className="flex items-start justify-between p-3 rounded-lg bg-red-500/15 border border-red-400/30 text-red-300 text-sm">
+                                <span>{localError}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setLocalError(null)}
+                                    className="ml-2 text-red-300/70 hover:text-red-200 flex-shrink-0 leading-none text-lg"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        )}
+
+                        {infoMessage && (
+                            <div className="p-3 rounded-lg bg-blue-500/15 border border-blue-400/30 text-blue-200 text-sm">
+                                {infoMessage}
+                            </div>
+                        )}
+
                         {error && (
                             <div className="flex items-start justify-between p-3 rounded-lg bg-red-500/15 border border-red-400/30 text-red-300 text-sm">
                                 <span>{error}</span>
@@ -125,7 +309,7 @@ export default function RegisterPage() {
 
                         <div className="space-y-1.5">
                             <label className="block text-sm font-medium text-blue-100">Email</label>
-                            <div className="relative">
+                            <div className="relative flex items-center gap-2">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-300/60 pointer-events-none" />
                                 <input
                                     type="email"
@@ -134,9 +318,54 @@ export default function RegisterPage() {
                                     {...register("email")}
                                     className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-blue-300/40 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 transition-all text-sm"
                                 />
+                                <button
+                                    type="button"
+                                    onClick={handleSendOtp}
+                                    disabled={isSendingOtp || resendCooldownSeconds > 0}
+                                    className="h-11 whitespace-nowrap rounded-xl border border-blue-400/40 bg-blue-500/20 px-3 text-xs font-semibold text-blue-100 transition-all hover:bg-blue-500/30 disabled:opacity-60"
+                                >
+                                    {isSendingOtp
+                                        ? "Dang gui..."
+                                        : resendCooldownSeconds > 0
+                                            ? `Gui lai (${resendCooldownSeconds}s)`
+                                            : "Gui ma OTP"}
+                                </button>
                             </div>
                             {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
                         </div>
+
+                        {isOtpSent && (
+                            <div className="space-y-1.5 rounded-xl border border-white/15 bg-white/10 p-3">
+                                <label className="block text-sm font-medium text-blue-100">Ma OTP</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={6}
+                                        value={otpCode}
+                                        onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ""))}
+                                        placeholder="Nhap 6 chu so"
+                                        className="h-10 w-full rounded-xl border border-white/20 bg-white/10 px-3 text-sm text-white placeholder-blue-200/40 focus:outline-none focus:border-blue-400"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleVerifyOtp}
+                                        disabled={isVerifyingOtp || otpSecondsLeft <= 0}
+                                        className="h-10 whitespace-nowrap rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 text-xs font-semibold text-emerald-100 transition-all hover:bg-emerald-500/30 disabled:opacity-60"
+                                    >
+                                        {isVerifyingOtp ? "Dang xac thuc..." : "Xac thuc"}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-blue-200/80">
+                                    {otpSecondsLeft > 0
+                                        ? `Ma OTP se het han sau ${otpSecondsLeft}s`
+                                        : "Ma OTP da het han. Vui long gui lai ma moi."}
+                                </p>
+                                {verifiedEmail === emailValue.trim().toLowerCase() && emailVerificationToken && (
+                                    <p className="text-xs font-medium text-emerald-300">Email da duoc xac thuc.</p>
+                                )}
+                            </div>
+                        )}
 
                         <div className="space-y-1.5">
                             <label className="block text-sm font-medium text-blue-100">Số điện thoại (tùy chọn)</label>
@@ -219,7 +448,7 @@ export default function RegisterPage() {
 
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isLoading || !emailVerificationToken || verifiedEmail !== emailValue.trim().toLowerCase()}
                             className="w-full h-11 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-lg shadow-blue-700/30 hover:shadow-blue-500/40 flex items-center justify-center gap-2"
                         >
                             {isLoading && (

@@ -32,6 +32,14 @@ interface Config {
         apiKey?: string;
         apiSecret?: string;
     };
+    EMAIL: {
+        host?: string;
+        port: number;
+        secure: boolean;
+        user?: string;
+        pass?: string;
+        from: string;
+    };
 }
 
 const config: Config = {
@@ -66,6 +74,15 @@ const config: Config = {
         cloudName: process.env.CLOUDINARY_CLOUD_NAME,
         apiKey: process.env.CLOUDINARY_API_KEY,
         apiSecret: process.env.CLOUDINARY_API_SECRET,
+    },
+
+    EMAIL: {
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+        from: process.env.SMTP_FROM || 'no-reply@borrowingbooks.local',
     },
 };
 

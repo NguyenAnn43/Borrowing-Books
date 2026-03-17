@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const registerSchema = {
     body: z.object({
         email: z.string().email('Invalid email format'),
+        emailVerificationToken: z.string().min(1, 'Email verification token is required'),
         password: z
             .string()
             .min(8, 'Password must be at least 8 characters')
@@ -28,7 +29,24 @@ export const refreshTokenSchema = {
     }),
 };
 
+export const requestRegisterOtpSchema = {
+    body: z.object({
+        email: z.string().email('Invalid email format'),
+    }),
+};
+
+export const verifyRegisterOtpSchema = {
+    body: z.object({
+        email: z.string().email('Invalid email format'),
+        otpCode: z
+            .string()
+            .regex(/^\d{6}$/, 'OTP code must be 6 digits'),
+    }),
+};
+
 // Types from schemas
 export type RegisterInput = z.infer<typeof registerSchema.body>;
 export type LoginInput = z.infer<typeof loginSchema.body>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema.body>;
+export type RequestRegisterOtpInput = z.infer<typeof requestRegisterOtpSchema.body>;
+export type VerifyRegisterOtpInput = z.infer<typeof verifyRegisterOtpSchema.body>;

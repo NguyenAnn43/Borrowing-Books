@@ -4,3 +4,4 @@ export * as borrowingService from './borrowingService';
 export * as notificationService from './notificationService';
 export * as reservationService from './reservationService';
 export * as wishlistService from './wishlistService';
+export * as registerVerificationService from './registerVerificationService';

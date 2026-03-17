@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { bookService } from "@/services/bookService";
+import { wishlistService } from "@/services/wishlistService";
+import { useAuthStore } from "@/stores/authStore";
 import type { IBook } from "@/types";
 
 const FALLBACK_COVER =
@@ -100,6 +102,20 @@ export default function HomePage() {
   const [isLoadingBooks, setIsLoadingBooks] = useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [error, setError] = useState<string>("");
+  const [wishlistMessage, setWishlistMessage] = useState<string>("");
+  const [wishlistMessageType, setWishlistMessageType] = useState<"info" | "error">("info");
+  const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
+  const [wishlistLoadingBookId, setWishlistLoadingBookId] = useState<string | null>(null);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const { user, isAuthenticated, getCurrentUser, logout } = useAuthStore();
+  const isSignedIn = isAuthenticated && Boolean(user) && user?.role !== "guest";
+
+  const dashboardHref = user?.role === "admin"
+    ? "/dashboard/admin"
+    : user?.role === "librarian"
+      ? "/dashboard/librarian"
+      : "/dashboard/user";
 
   const loadBooks = useCallback(async (nextQuery = "", nextCategory = "") => {
     setIsLoadingBooks(true);
@@ -124,10 +140,17 @@ export default function HomePage() {
 
       setBooks(featuredBooks);
       setAllBooks(categorySourceBooks);
+      setWishlistedBookIds(
+        featuredBooks.reduce<Record<string, boolean>>((acc, book) => {
+          acc[book._id] = Boolean(book.isWishlisted);
+          return acc;
+        }, {})
+      );
     } catch {
       setError("Không tải được dữ liệu sách. Vui lòng thử lại.");
       setBooks([]);
       setAllBooks([]);
+      setWishlistedBookIds({});
     } finally {
       setIsLoadingBooks(false);
       setIsLoadingCategories(false);
@@ -137,6 +160,36 @@ export default function HomePage() {
   useEffect(() => {
     void loadBooks();
   }, [loadBooks]);
+
+  useEffect(() => {
+    void getCurrentUser();
+  }, [getCurrentUser]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!accountMenuRef.current) return;
+      if (!accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!wishlistMessage) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setWishlistMessage("");
+    }, 2600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [wishlistMessage]);
 
   const categories = useMemo<UICategory[]>(() => {
     const counts = new Map<string, number>();
@@ -170,8 +223,63 @@ export default function HomePage() {
     await loadBooks(query, normalized);
   };
 
+  const isBookWishlisted = (book: IBook): boolean => {
+    if (wishlistedBookIds[book._id] !== undefined) {
+      return wishlistedBookIds[book._id];
+    }
+    return Boolean(book.isWishlisted);
+  };
+
+  const handleWishlistToggle = async (event: React.MouseEvent, book: IBook) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!isSignedIn) {
+      setWishlistMessageType("info");
+      setWishlistMessage("Bạn cần đăng nhập để thêm sách vào wishlist.");
+      return;
+    }
+
+    const currentWishlisted = isBookWishlisted(book);
+    setWishlistLoadingBookId(book._id);
+    setWishlistMessage("");
+
+    try {
+      if (currentWishlisted) {
+        const result = await wishlistService.removeFromWishlist(book._id);
+        setWishlistedBookIds((prev) => ({ ...prev, [book._id]: result.isWishlisted }));
+        setWishlistMessageType("info");
+        setWishlistMessage("Đã bỏ khỏi wishlist.");
+      } else {
+        const result = await wishlistService.addToWishlist(book._id);
+        setWishlistedBookIds((prev) => ({ ...prev, [book._id]: result.isWishlisted }));
+        setWishlistMessageType("info");
+        setWishlistMessage("Đã thêm vào wishlist.");
+      }
+    } catch {
+      setWishlistMessageType("error");
+      setWishlistMessage("Không thể cập nhật wishlist. Vui lòng thử lại.");
+    } finally {
+      setWishlistLoadingBookId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f6f8] text-[#111318] transition-colors duration-200 dark:bg-[#101622] dark:text-white">
+      {wishlistMessage ? (
+        <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+          <div
+            className={`rounded-xl px-4 py-3 text-sm font-medium shadow-xl backdrop-blur ${
+              wishlistMessageType === "error"
+                ? "border border-red-300 bg-red-50/95 text-red-700 dark:border-red-700/50 dark:bg-red-900/80 dark:text-red-300"
+                : "border border-blue-300 bg-blue-50/95 text-blue-700 dark:border-blue-700/50 dark:bg-blue-900/80 dark:text-blue-200"
+            }`}
+          >
+            {wishlistMessage}
+          </div>
+        </div>
+      ) : null}
+
       <style jsx global>{`
         @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap");
         @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
@@ -244,19 +352,68 @@ export default function HomePage() {
               </form>
             </label>
 
-            <Link href="/login" className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#2b6cee] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:bg-blue-700 hover:shadow-lg active:scale-95 dark:hover:bg-blue-600">
-              <span className="truncate">Sign In</span>
-            </Link>
+            {isSignedIn ? (
+              <div className="relative" ref={accountMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+                  className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-semibold text-[#111318] transition-all duration-300 hover:border-[#2b6cee] hover:text-[#2b6cee] dark:border-gray-700 dark:bg-[#101622] dark:text-gray-200"
+                >
+                  <span className="flex size-7 items-center justify-center rounded-full bg-[#2b6cee] text-xs font-bold text-white">
+                    {user?.fullName?.charAt(0).toUpperCase() ?? "U"}
+                  </span>
+                  <span className="hidden sm:inline">Tài khoản</span>
+                  <span className="material-symbols-outlined text-base">expand_more</span>
+                </button>
 
-            <Link
-              className="size-10 overflow-hidden rounded-full border border-gray-200 bg-cover bg-center bg-no-repeat transition-all duration-300 hover:ring-2 hover:ring-[#2b6cee] hover:ring-offset-2 dark:border-gray-700 dark:hover:ring-offset-[#101622]"
-              style={{
-                backgroundImage:
-                  'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQhrvkpn7QIkSQrWD6ryk8-VjcLjjdfyBeE4MTZoL8wPCzy0f7NGQsTUQyRBxEXN5a1RtksfJFs3JP6KDlMnwX2ilQwOkEDreem4zWAIk6K4ja2AiLsC8X1l9kw69nbSiajR8kROHyMMSV6PxWZpVNXKK_AGL3gUsizt3p0fU6ZJx7G1w3LDWDBELQlyMdAB3jSth93Y-X6b3igC_x4s7UYAIbi8oZHg0lqng5pXU-9-Rr9ZVu2mHgntW_Vr1Ablp0pjEo7RowVb6x")',
-              }}
-              href="/dashboard/profile"
-              aria-label="View profile"
-            />
+                {isAccountMenuOpen ? (
+                  <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-gray-700 dark:bg-[#0f172a]">
+                    <Link
+                      href={dashboardHref}
+                      onClick={() => setIsAccountMenuOpen(false)}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                      Vào Dashboard
+                    </Link>
+                    {(user?.role === "admin" || user?.role === "librarian") ? (
+                      <Link
+                        href={dashboardHref}
+                        onClick={() => setIsAccountMenuOpen(false)}
+                        className="flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-[#111318] transition-colors hover:bg-[#eef3ff] hover:text-[#2b6cee] dark:text-gray-200 dark:hover:bg-gray-800"
+                      >
+                        Quản trị
+                      </Link>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await logout();
+                        setIsAccountMenuOpen(false);
+                      }}
+                      className="mt-1 flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                    >
+                      Đăng xuất
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <Link href="/login" className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#2b6cee] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:bg-blue-700 hover:shadow-lg active:scale-95 dark:hover:bg-blue-600">
+                  <span className="truncate">Sign In</span>
+                </Link>
+
+                <Link
+                  className="size-10 overflow-hidden rounded-full border border-gray-200 bg-cover bg-center bg-no-repeat transition-all duration-300 hover:ring-2 hover:ring-[#2b6cee] hover:ring-offset-2 dark:border-gray-700 dark:hover:ring-offset-[#101622]"
+                  style={{
+                    backgroundImage:
+                      'url("https://lh3.googleusercontent.com/aida-public/AB6AXuCQhrvkpn7QIkSQrWD6ryk8-VjcLjjdfyBeE4MTZoL8wPCzy0f7NGQsTUQyRBxEXN5a1RtksfJFs3JP6KDlMnwX2ilQwOkEDreem4zWAIk6K4ja2AiLsC8X1l9kw69nbSiajR8kROHyMMSV6PxWZpVNXKK_AGL3gUsizt3p0fU6ZJx7G1w3LDWDBELQlyMdAB3jSth93Y-X6b3igC_x4s7UYAIbi8oZHg0lqng5pXU-9-Rr9ZVu2mHgntW_Vr1Ablp0pjEo7RowVb6x")',
+                  }}
+                  href="/register"
+                  aria-label="Create account"
+                />
+              </>
+            )}
           </div>
         </header>
 
@@ -356,7 +513,7 @@ export default function HomePage() {
                           <p className="truncate text-sm font-medium leading-normal text-[#616f89] dark:text-gray-400">
                             {book.author}
                           </p>
-                          <div className="mt-2 flex items-center gap-1">
+                          <div className="mt-2 flex items-center justify-between gap-2">
                             <span
                               className={`text-xs font-semibold px-2 py-1 rounded-full ${
                                 book.availableCopies > 0
@@ -366,6 +523,23 @@ export default function HomePage() {
                             >
                               {book.availableCopies}/{book.totalCopies}
                             </span>
+                            <button
+                              type="button"
+                              disabled={wishlistLoadingBookId === book._id}
+                              onClick={(event) => void handleWishlistToggle(event, book)}
+                              className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${
+                                isBookWishlisted(book)
+                                  ? "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
+                                  : "border-gray-300 bg-white text-gray-600 hover:border-rose-300 hover:text-rose-600 dark:border-gray-600 dark:bg-transparent dark:text-gray-300"
+                              } disabled:opacity-60`}
+                              aria-label={isBookWishlisted(book) ? "Bỏ yêu thích" : "Thêm yêu thích"}
+                            >
+                              {wishlistLoadingBookId === book._id
+                                ? "..."
+                                : isBookWishlisted(book)
+                                  ? "♥"
+                                  : "♡"}
+                            </button>
                           </div>
                         </div>
                       </Link>

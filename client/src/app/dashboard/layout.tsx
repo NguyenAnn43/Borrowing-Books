@@ -10,14 +10,12 @@ const roleLabel: Record<string, string> = {
     admin: "Quản trị viên",
     librarian: "Thủ thư",
     user: "Độc giả",
-    guest: "Khách",
 };
 
 const roleBadgeColor: Record<string, string> = {
     admin: "bg-red-500/20 text-red-300 border-red-500/30",
     librarian: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
     user: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    guest: "bg-slate-500/20 text-slate-300 border-slate-500/30",
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -36,9 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 ? "/dashboard/admin"
                 : user?.role === "librarian"
                     ? "/dashboard/librarian"
-                    : user?.role === "guest"
-                        ? "/dashboard/guest"
-                        : "/dashboard/user",
+                    : "/dashboard/user",
             label: "Tổng quan",
             icon: LayoutDashboard,
         },
@@ -67,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ];
 
     return (
-        <RouteGuard>
+        <RouteGuard allowedRoles={["admin", "librarian", "user"]}>
             <div className="min-h-screen bg-slate-950 flex">
                 {/* Sidebar */}
                 <aside className="w-64 flex-shrink-0 bg-slate-900/80 border-r border-white/5 flex flex-col">
@@ -128,7 +124,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
                         >
                             <LogOut className="h-4 w-4" />
-                            {user?.role === "guest" ? "Thoát guest" : "Đăng xuất"}
+                            Đăng xuất
                         </button>
                     </div>
                 </aside>
