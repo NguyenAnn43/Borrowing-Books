@@ -37,6 +37,14 @@ export const createBorrowing = asyncHandler(async (req: AuthRequest, res: Respon
 });
 
 /**
+ * Create bulk borrowing request
+ */
+export const createBulkBorrowing = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowings = await borrowingService.createBulkBorrowing(req.user!._id.toString(), req.body);
+    res.status(201).json({ success: true, data: borrowings, message: 'Bulk borrowing request created successfully' });
+});
+
+/**
  * Confirm book pickup (librarian/admin)
  */
 export const confirmPickup = asyncHandler(async (req: AuthRequest, res: Response) => {

@@ -65,6 +65,7 @@ export default function HomePage() {
   const [isLoadingBooks, setIsLoadingBooks] = useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [error, setError] = useState<string>("");
+
   const [wishlistMessage, setWishlistMessage] = useState<string>("");
   const [wishlistMessageType, setWishlistMessageType] = useState<"info" | "error">("info");
   const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
@@ -232,11 +233,10 @@ export default function HomePage() {
       {wishlistMessage ? (
         <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
           <div
-            className={`rounded-xl px-4 py-3 text-sm font-medium shadow-xl backdrop-blur ${
-              wishlistMessageType === "error"
-                ? "border border-red-300 bg-red-50/95 text-red-700 dark:border-red-700/50 dark:bg-red-900/80 dark:text-red-300"
-                : "border border-blue-300 bg-blue-50/95 text-blue-700 dark:border-blue-700/50 dark:bg-blue-900/80 dark:text-blue-200"
-            }`}
+            className={`rounded-xl px-4 py-3 text-sm font-medium shadow-xl backdrop-blur ${wishlistMessageType === "error"
+              ? "border border-red-300 bg-red-50/95 text-red-700 dark:border-red-700/50 dark:bg-red-900/80 dark:text-red-300"
+              : "border border-blue-300 bg-blue-50/95 text-blue-700 dark:border-blue-700/50 dark:bg-blue-900/80 dark:text-blue-200"
+              }`}
           >
             {wishlistMessage}
           </div>
@@ -339,77 +339,75 @@ export default function HomePage() {
                 ? Array.from({ length: 6 }).map((_, i) => <BookSkeleton key={i} />)
                 : books.length === 0
                   ? <div className="w-full py-12 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600">
-                          library_books
-                        </span>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Không có sách phù hợp</p>
-                      </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600">
+                        library_books
+                      </span>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Không có sách phù hợp</p>
                     </div>
+                  </div>
                   : books.map((book) => (
-                      <Link
-                        key={book._id}
-                        href={`/books/${book._id}`}
-                        className="group flex min-w-48 max-w-48 flex-col gap-3 rounded-lg transition-all duration-300 hover:scale-105"
-                      >
-                        <div
-                          className="aspect-[3/4] w-full overflow-hidden rounded-xl bg-gray-200 shadow-lg transition-all duration-300 group-hover:shadow-2xl dark:bg-gray-700"
-                          style={{
-                            backgroundImage: `url("${book.coverImage || FALLBACK_COVER}")`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }}
-                        />
-                        <div className="px-1">
-                          <p
-                            className="line-clamp-1 text-base font-bold leading-tight text-[#111318] dark:text-white"
-                            title={book.title}
-                          >
-                            {book.title}
-                          </p>
-                          <p className="truncate text-sm font-medium leading-normal text-[#616f89] dark:text-gray-400">
-                            {book.author}
-                          </p>
-                          <p className="mt-1 line-clamp-1 text-xs font-medium text-[#2b6cee] dark:text-blue-400" title={book.libraryId?.name || "Không xác định thư viện"}>
-                            📚 {book.libraryId?.name || "Không xác định thư viện"}
-                            {book.libraryId?.code ? ` (${book.libraryId.code})` : ""}
-                          </p>
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <span
-                              className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                                book.availableCopies > 0
-                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                  : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                    <Link
+                      key={book._id}
+                      href={`/books/${book._id}`}
+                      className="group flex min-w-48 max-w-48 flex-col gap-3 rounded-lg transition-all duration-300 hover:scale-105"
+                    >
+                      <div
+                        className="aspect-[3/4] w-full overflow-hidden rounded-xl bg-gray-200 shadow-lg transition-all duration-300 group-hover:shadow-2xl dark:bg-gray-700"
+                        style={{
+                          backgroundImage: `url("${book.coverImage || FALLBACK_COVER}")`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                        }}
+                      />
+                      <div className="px-1">
+                        <p
+                          className="line-clamp-1 text-base font-bold leading-tight text-[#111318] dark:text-white"
+                          title={book.title}
+                        >
+                          {book.title}
+                        </p>
+                        <p className="truncate text-sm font-medium leading-normal text-[#616f89] dark:text-gray-400">
+                          {book.author}
+                        </p>
+                        <p className="mt-1 line-clamp-1 text-xs font-medium text-[#2b6cee] dark:text-blue-400" title={book.libraryId?.name || "Không xác định thư viện"}>
+                          📚 {book.libraryId?.name || "Không xác định thư viện"}
+                          {book.libraryId?.code ? ` (${book.libraryId.code})` : ""}
+                        </p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span
+                            className={`text-xs font-semibold px-2 py-1 rounded-full ${book.availableCopies > 0
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
                               }`}
-                            >
-                              {book.availableCopies}/{book.totalCopies}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={wishlistLoadingBookId === book._id}
-                              onClick={(event) => void handleWishlistToggle(event, book)}
-                              className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${
-                                isBookWishlisted(book)
-                                  ? "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
-                                  : "border-gray-300 bg-white text-gray-600 hover:border-rose-300 hover:text-rose-600 dark:border-gray-600 dark:bg-transparent dark:text-gray-300"
+                          >
+                            {book.availableCopies}/{book.totalCopies}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={wishlistLoadingBookId === book._id}
+                            onClick={(event) => void handleWishlistToggle(event, book)}
+                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${isBookWishlisted(book)
+                              ? "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
+                              : "border-gray-300 bg-white text-gray-600 hover:border-rose-300 hover:text-rose-600 dark:border-gray-600 dark:bg-transparent dark:text-gray-300"
                               } disabled:opacity-60`}
-                              aria-label={isBookWishlisted(book) ? "Bỏ yêu thích" : "Thêm yêu thích"}
-                            >
-                              {wishlistLoadingBookId === book._id
-                                ? "..."
-                                : isBookWishlisted(book)
-                                  ? "♥"
-                                  : "♡"}
-                            </button>
-                            <span className="text-xs font-semibold rounded-full bg-blue-100 px-2 py-1 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                              {libraryPresenceByBookId[book._id] && libraryPresenceByBookId[book._id] > 1
-                                ? `Có ở ${libraryPresenceByBookId[book._id]} thư viện`
-                                : "1 thư viện"}
-                            </span>
-                          </div>
+                            aria-label={isBookWishlisted(book) ? "Bỏ yêu thích" : "Thêm yêu thích"}
+                          >
+                            {wishlistLoadingBookId === book._id
+                              ? "..."
+                              : isBookWishlisted(book)
+                                ? "♥"
+                                : "♡"}
+                          </button>
+                          <span className="text-xs font-semibold rounded-full bg-blue-100 px-2 py-1 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            {libraryPresenceByBookId[book._id] && libraryPresenceByBookId[book._id] > 1
+                              ? `Có ở ${libraryPresenceByBookId[book._id]} thư viện`
+                              : "1 thư viện"}
+                          </span>
                         </div>
-                      </Link>
-                    ))}
+                      </div>
+                    </Link>
+                  ))}
             </div>
           </div>
         </section>
@@ -424,34 +422,32 @@ export default function HomePage() {
               ? Array.from({ length: 4 }).map((_, i) => <CategorySkeleton key={i} />)
               : categories.length === 0
                 ? <p className="col-span-2 text-center text-sm text-gray-500 dark:text-gray-400 md:col-span-4">
-                    Chưa có danh mục
-                  </p>
+                  Chưa có danh mục
+                </p>
                 : categories.map((category) => (
-                    <button
-                      key={category.name}
-                      type="button"
-                      onClick={() => void handleCategoryClick(category.name)}
-                      className={`group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 ${
-                        activeCategory === category.name ? "ring-2 ring-offset-2 ring-[#2b6cee] dark:ring-offset-[#101622]" : ""
+                  <button
+                    key={category.name}
+                    type="button"
+                    onClick={() => void handleCategoryClick(category.name)}
+                    className={`group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 ${activeCategory === category.name ? "ring-2 ring-offset-2 ring-[#2b6cee] dark:ring-offset-[#101622]" : ""
                       } hover:shadow-xl`}
-                    >
-                      <div
-                        className={`absolute inset-0 transition-all duration-300 ${category.bg} ${
-                          activeCategory === category.name ? "opacity-100" : "opacity-80 group-hover:opacity-95"
+                  >
+                    <div
+                      className={`absolute inset-0 transition-all duration-300 ${category.bg} ${activeCategory === category.name ? "opacity-100" : "opacity-80 group-hover:opacity-95"
                         }`}
-                      />
-                      <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
-                        <span className="material-symbols-outlined text-9xl text-white">{category.icon}</span>
-                      </div>
-                      <div className="z-10 space-y-1">
-                        <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">
-                          {category.icon}
-                        </span>
-                        <p className="text-lg font-bold text-white">{category.name}</p>
-                        <p className="text-sm text-white/80">{formatCategoryCount(category.count)}</p>
-                      </div>
-                    </button>
-                  ))}
+                    />
+                    <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
+                      <span className="material-symbols-outlined text-9xl text-white">{category.icon}</span>
+                    </div>
+                    <div className="z-10 space-y-1">
+                      <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">
+                        {category.icon}
+                      </span>
+                      <p className="text-lg font-bold text-white">{category.name}</p>
+                      <p className="text-sm text-white/80">{formatCategoryCount(category.count)}</p>
+                    </div>
+                  </button>
+                ))}
           </div>
         </section>
 

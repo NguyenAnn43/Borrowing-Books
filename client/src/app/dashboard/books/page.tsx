@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, Heart, Loader2 } from "lucide-react";
+import { BookOpen, Heart, Loader2, ShoppingCart } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 import { bookService } from "@/services/bookService";
 import { wishlistService } from "@/services/wishlistService";
 import type { IBook } from "@/types";
 
 export default function DashboardBooksPage() {
     const { user } = useAuthStore();
+    const cartStore = useCartStore();
     const [books, setBooks] = useState<IBook[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -145,23 +147,41 @@ export default function DashboardBooksPage() {
                                             <p className="text-slate-400 text-sm mt-1">{book.author}</p>
                                             <p className="text-slate-500 text-xs mt-2">The loai: {book.category}</p>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleWishlist(book)}
-                                            disabled={isProcessing}
-                                            className={`inline-flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${
-                                                wishlisted
-                                                    ? "bg-rose-500/20 border-rose-400/40 text-rose-300"
-                                                    : "bg-white/5 border-white/10 text-slate-300 hover:text-rose-300 hover:border-rose-400/30"
-                                            } ${isProcessing ? "opacity-60 cursor-not-allowed" : ""}`}
-                                            aria-label={wishlisted ? "Bo yeu thich" : "Them yeu thich"}
-                                        >
-                                            {isProcessing ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <Heart className={`h-4 w-4 ${wishlisted ? "fill-current" : ""}`} />
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleWishlist(book)}
+                                                disabled={isProcessing}
+                                                className={`inline-flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${
+                                                    wishlisted
+                                                        ? "bg-rose-500/20 border-rose-400/40 text-rose-300"
+                                                        : "bg-white/5 border-white/10 text-slate-300 hover:text-rose-300 hover:border-rose-400/30"
+                                                } ${isProcessing ? "opacity-60 cursor-not-allowed" : ""}`}
+                                                aria-label={wishlisted ? "Bo yeu thich" : "Them yeu thich"}
+                                            >
+                                                {isProcessing ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Heart className={`h-4 w-4 ${wishlisted ? "fill-current" : ""}`} />
+                                                )}
+                                            </button>
+                                            
+                                            {user?.role === "user" && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => cartStore.isInCart(book._id) ? cartStore.removeFromCart(book._id) : cartStore.addToCart(book)}
+                                                    className={`inline-flex items-center justify-center w-10 h-10 rounded-xl border transition-all ${
+                                                        cartStore.isInCart(book._id)
+                                                            ? "bg-blue-500/20 border-blue-400/40 text-blue-300"
+                                                            : "bg-white/5 border-white/10 text-slate-300 hover:text-blue-300 hover:border-blue-400/30"
+                                                    }`}
+                                                    aria-label={cartStore.isInCart(book._id) ? "Xóa khỏi giỏ sách" : "Thêm vào giỏ sách"}
+                                                    title={cartStore.isInCart(book._id) ? "Xóa khỏi giỏ sách" : "Thêm vào giỏ sách"}
+                                                >
+                                                    <ShoppingCart className={`h-4 w-4 ${cartStore.isInCart(book._id) ? "fill-current" : ""}`} />
+                                                </button>
                                             )}
-                                        </button>
+                                        </div>
                                     </div>
 
                                     <div className="mt-4 flex items-center justify-between text-xs text-slate-400">

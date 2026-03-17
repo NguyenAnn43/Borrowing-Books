@@ -1,7 +1,7 @@
 import { Router, IRouter } from 'express';
 import { borrowingController } from '../controllers';
 import { protect, authorize, validate } from '../middlewares';
-import { createBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema } from '../validators';
+import { createBorrowingSchema, createBulkBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema } from '../validators';
 import { ROLES } from '../utils';
 
 const router: IRouter = Router();
@@ -18,6 +18,15 @@ router.post(
     authorize(ROLES.USER),
     validate(createBorrowingSchema),
     borrowingController.createBorrowing
+);
+
+/** POST /borrowings/bulk — user creates a bulk borrow request */
+router.post(
+    '/bulk',
+    protect,
+    authorize(ROLES.USER),
+    validate(createBulkBorrowingSchema),
+    borrowingController.createBulkBorrowing
 );
 
 /** DELETE /borrowings/:id/cancel — owner cancels a PENDING request */
