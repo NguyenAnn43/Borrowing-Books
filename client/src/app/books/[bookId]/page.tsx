@@ -97,9 +97,31 @@ export default function BookDetailPage() {
       });
       setReserveMessage("Đã tạo yêu cầu đặt trước. Bạn có thể theo dõi trong mục Đặt trước của tôi.");
     } catch (reserveActionError) {
-      const message = reserveActionError instanceof Error
-        ? reserveActionError.message
-        : "Không thể tạo đặt trước. Vui lòng thử lại.";
+      let message = "Không thể tạo đặt trước. Vui lòng thử lại.";
+      
+      // Check if it's an axios error with response data
+      if (
+        reserveActionError &&
+        typeof reserveActionError === "object" &&
+        "response" in reserveActionError &&
+        reserveActionError.response &&
+        typeof reserveActionError.response === "object"
+      ) {
+        const response = reserveActionError.response as Record<string, unknown>;
+        if (response.data && typeof response.data === "object") {
+          const data = response.data as Record<string, unknown>;
+          if (data.error && typeof data.error === "object") {
+            const error = data.error as Record<string, unknown>;
+            if (error.message && typeof error.message === "string") {
+              message = error.message;
+            }
+          }
+        }
+      } else if (reserveActionError instanceof Error) {
+        // Fallback for regular Error objects
+        message = reserveActionError.message;
+      }
+      
       setReserveError(message);
     } finally {
       setIsReserving(false);

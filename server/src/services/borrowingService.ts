@@ -2,6 +2,8 @@ import mongoose, { Types } from 'mongoose';
 import { Borrowing, Book, User } from '../models';
 import * as notificationService from './notificationService';
 import * as bookService from './bookService';
+import * as reservationService from './reservationService';
+import logger from '../utils/logger';
 import {
     AppError, formatPagination, generateDueDate, calculateOverdueDays, calculateFine,
     BORROWING_STATUS, BORROWING_SETTINGS, PAGINATION, NOTIFICATION_TYPE,
@@ -30,14 +32,27 @@ const toId = (field: Types.ObjectId | { _id: Types.ObjectId } | unknown): string
 
 /**
  * Get all borrowings with pagination and filters (admin/librarian)
+ * Librarians can only see borrowings for their own library
  */
-export const getBorrowings = async (params: GetBorrowingsQuery): Promise<GetBorrowingsResult> => {
+export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: IUser): Promise<GetBorrowingsResult> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
 
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
-    if (libraryId) query.libraryId = libraryId;
     if (userId) query.userId = userId;
+
+    // Librarians can only view borrowings for their own library
+    if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+        query.libraryId = requestingUser.libraryId;
+    } else if (libraryId && requestingUser.role === ROLES.ADMIN) {
+        // Only admins can filter by different libraries
+        query.libraryId = libraryId;
+    }
 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
@@ -244,13 +259,26 @@ export const createBulkBorrowing = async (userId: string, data: CreateBulkBorrow
  * Confirm book pickup (librarian action).
  * Uses a Mongoose transaction to atomically decrement stock and flip Borrowing status.
  */
-export const confirmPickup = async (id: string): Promise<IBorrowing> => {
+export const confirmPickup = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
         if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
+
+        // Librarians can only manage borrowings for their own library
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+            if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+                throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
+            }
+        }
+
         if (borrowing.status !== BORROWING_STATUS.PENDING) {
             throw new AppError('Invalid borrowing status', 400, 'INVALID_STATUS');
         }
@@ -286,14 +314,28 @@ export const confirmPickup = async (id: string): Promise<IBorrowing> => {
 /**
  * Record book return (librarian action).
  * Uses a Mongoose transaction to atomically restore stock and finalize Borrowing.
+ * Librarians can only process returns for borrowings in their library.
  */
-export const returnBook = async (id: string): Promise<IBorrowing> => {
+export const returnBook = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
         if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
+
+        // Librarians can only manage borrowings for their own library
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+            if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+                throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
+            }
+        }
+
         if (borrowing.status !== BORROWING_STATUS.BORROWED && borrowing.status !== BORROWING_STATUS.OVERDUE) {
             throw new AppError('Invalid borrowing status', 400, 'INVALID_STATUS');
         }
@@ -314,6 +356,14 @@ export const returnBook = async (id: string): Promise<IBorrowing> => {
         await bookService.incrementAvailabilityAtomic(toId(borrowing.bookId), session);
 
         await session.commitTransaction();
+
+        // Check for pending reservations and auto-fulfill the earliest one
+        try {
+            await reservationService.autoFulfillPendingReservation(toId(borrowing.bookId));
+        } catch (reservationErr) {
+            // Log the error but don't fail the return operation
+            logger.error('[returnBook] Failed to auto-fulfill pending reservation', reservationErr);
+        }
 
         // Notification outside transaction
         let message = 'You have returned the book.';
@@ -407,9 +457,21 @@ export const renewBorrowing = async (id: string, userId: string): Promise<IBorro
 /**
  * Mark a borrowing's fine as paid (librarian/admin only).
  */
-export const payFine = async (id: string): Promise<IBorrowing> => {
+export const payFine = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const borrowing = await Borrowing.findById(id) as IBorrowing | null;
     if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
+
+    // Librarians can only manage borrowings for their own library
+    if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+        if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+            throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
+        }
+    }
 
     if (!borrowing.isFined) {
         throw new AppError('This borrowing has no outstanding fine', 400, 'NO_FINE');

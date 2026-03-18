@@ -8,7 +8,7 @@ import { GetBorrowingsQuery } from '../validators/borrowingSchema';
  * Get all borrowings (admin/librarian)
  */
 export const getBorrowings = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const result = await borrowingService.getBorrowings(req.query as unknown as GetBorrowingsQuery);
+    const result = await borrowingService.getBorrowings(req.query as unknown as GetBorrowingsQuery, req.user!);
     res.json({ success: true, data: result.borrowings, meta: result.pagination });
 });
 
@@ -48,7 +48,7 @@ export const createBulkBorrowing = asyncHandler(async (req: AuthRequest, res: Re
  * Confirm book pickup (librarian/admin)
  */
 export const confirmPickup = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const borrowing = await borrowingService.confirmPickup(req.params['id']!);
+    const borrowing = await borrowingService.confirmPickup(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Book pickup confirmed' });
 });
 
@@ -56,7 +56,7 @@ export const confirmPickup = asyncHandler(async (req: AuthRequest, res: Response
  * Return book (librarian/admin)
  */
 export const returnBook = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const borrowing = await borrowingService.returnBook(req.params['id']!);
+    const borrowing = await borrowingService.returnBook(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Book returned successfully' });
 });
 
@@ -80,6 +80,6 @@ export const renewBorrowing = asyncHandler(async (req: AuthRequest, res: Respons
  * Mark fine as paid (librarian/admin)
  */
 export const payFine = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const borrowing = await borrowingService.payFine(req.params['id']!);
+    const borrowing = await borrowingService.payFine(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Fine marked as paid' });
 });

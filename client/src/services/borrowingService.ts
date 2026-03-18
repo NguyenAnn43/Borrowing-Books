@@ -10,7 +10,7 @@ export interface CreateBorrowingData {
 export interface GetBorrowingsParams {
     page?: number;
     limit?: number;
-    status?: "pending" | "borrowed" | "returned" | "overdue";
+    status?: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
     libraryId?: string;
     userId?: string;
 }
