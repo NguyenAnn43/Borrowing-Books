@@ -47,6 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ? [
                 { href: "/dashboard/borrowings", label: "Mượn của tôi", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
+                { href: "/dashboard/payments", label: "Lịch sử thanh toán", icon: BookCopy },
                 { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
                 { href: "/dashboard/cart", label: "Giỏ sách", icon: ShoppingCart },
             ]

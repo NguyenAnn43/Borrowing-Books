@@ -7,6 +7,7 @@ import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
 import { borrowingService } from "@/services/borrowingService";
 import { reviewService } from "@/services/reviewService";
+import { paymentService } from "@/services/paymentService";
 import { Pagination } from "@/components/ui/Pagination";
 import { Input } from "@/components/ui/Input";
 import { usePagination, useSearch } from "@/hooks";
@@ -42,6 +43,19 @@ const getStatusColor = (status: string): string => {
         cancelled: "bg-red-500/20 border border-red-500/50 text-red-200",
     };
     return colorMap[status] || "bg-slate-500/20 border border-slate-500/50 text-slate-200";
+};
+
+const getApiErrorMessage = (err: unknown): string | undefined => {
+    if (!err || typeof err !== "object") return undefined;
+
+    const data = (err as {
+        message?: string;
+        response?: { data?: { error?: { message?: string }; message?: string } };
+    });
+
+    return data.response?.data?.error?.message
+        || data.response?.data?.message
+        || data.message;
 };
 
 export default function BorrowingsPage() {
@@ -122,11 +136,11 @@ export default function BorrowingsPage() {
         if (debouncedTerm) {
             goToPage(1);
         }
-    }, [debouncedTerm, limit, selectedStatus]);
+    }, [debouncedTerm, limit, selectedStatus, fetchBorrowings, goToPage]);
 
     useEffect(() => {
         void fetchBorrowings();
-    }, [page]);
+    }, [page, fetchBorrowings]);
 
     const runAction = async (id: string, action: () => Promise<unknown>, successMessage: string) => {
         setActionLoading(id);
@@ -334,6 +348,21 @@ export default function BorrowingsPage() {
         }
     };
 
+    const handleFinePayment = async (borrowingId: string) => {
+        setActionLoading(borrowingId);
+        setError(null);
+        setSuccess(null);
+
+        try {
+            const result = await paymentService.createVnpayFinePayment(borrowingId);
+            window.location.href = result.paymentUrl;
+        } catch (actionError) {
+            const message = getApiErrorMessage(actionError) || "Không thể tạo link thanh toán VNPay.";
+            setError(message);
+            setActionLoading(null);
+        }
+    };
+
     return (
         <RouteGuard allowedRoles={["admin", "librarian", "user"]}>
             <div className="p-8 space-y-6">
@@ -461,9 +490,26 @@ export default function BorrowingsPage() {
                                                     </span>
                                                 </td>
                                                 <td className="py-2 pr-3">{new Date(item.dueDate).toLocaleDateString("vi-VN")}</td>
-                                                <td className="py-2 pr-3">{item.fineAmount?.toLocaleString("vi-VN") || 0}</td>
+                                                <td className="py-2 pr-3">
+                                                    {item.fineAmount?.toLocaleString("vi-VN") || 0}
+                                                    {item.isFined && item.fineAmount > 0 ? (
+                                                        <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.finePaid
+                                                            ? "bg-emerald-500/20 text-emerald-200"
+                                                            : "bg-amber-500/20 text-amber-200"
+                                                            }`}>
+                                                            {item.finePaid ? "Đã thanh toán" : "Chưa thanh toán"}
+                                                        </span>
+                                                    ) : null}
+                                                </td>
                                                 <td className="py-2 text-right">
                                                     <div className="inline-flex flex-wrap items-center justify-end gap-2">
+                                                        <Link
+                                                            href={`/dashboard/borrowings/${item._id}`}
+                                                            className="rounded-lg border border-slate-500/40 bg-slate-500/10 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-500/20"
+                                                        >
+                                                            Chi tiết
+                                                        </Link>
+
                                                         {canManage && item.status === "pending" && (
                                                             <button
                                                                 type="button"
@@ -475,7 +521,7 @@ export default function BorrowingsPage() {
                                                             </button>
                                                         )}
 
-                                                        {canManage && (item.status === "borrowed" || item.status === "overdue") && (
+                                                        {canManage && item.status === "borrowed" && (
                                                         <button
                                                             type="button"
                                                             disabled={actionLoading === item._id}
@@ -486,16 +532,7 @@ export default function BorrowingsPage() {
                                                         </button>
                                                     )}
 
-                                                    {canManage && item.isFined && item.fineAmount > 0 && (
-                                                        <button
-                                                            type="button"
-                                                            disabled={actionLoading === item._id}
-                                                            onClick={() => void runAction(item._id, () => borrowingService.payFine(item._id), "Đã cập nhật thanh toán phạt.")}
-                                                            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"
-                                                        >
-                                                            Thanh toán phạt
-                                                        </button>
-                                                    )}
+                                                    {/* Fine payment for users is processed via VNPay only. Librarian/admin only monitor status. */}
 
                                                     {!canViewAll && item.status === "pending" && (
                                                         <button
@@ -549,6 +586,27 @@ export default function BorrowingsPage() {
                                                             <span className="inline-flex items-center gap-1">
                                                                 <Star className="h-3 w-3" /> ĐG thư viện
                                                             </span>
+                                                        </button>
+                                                    )}
+
+                                                    {!canViewAll && item.isFined && item.fineAmount > 0 && !item.finePaid && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={actionLoading === item._id}
+                                                            onClick={() => void handleFinePayment(item._id)}
+                                                            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"
+                                                        >
+                                                            Thanh toán VNPay
+                                                        </button>
+                                                    )}
+
+                                                    {!canViewAll && item.isFined && item.fineAmount > 0 && item.finePaid && (
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 opacity-70"
+                                                        >
+                                                            Đã thanh toán
                                                         </button>
                                                     )}
                                                 </div>

@@ -42,7 +42,7 @@ export interface ILibrary extends Document {
 export interface IBook extends Document {
     _id: Types.ObjectId;
     isbn?: string;
-    isbnNormalized?: string;
+    isbnNormalized?: string | null;
     title: string;
     author: string;
     publisher?: string;
@@ -176,6 +176,23 @@ export interface IReviewReport extends Document {
     adminNote?: string;
     resolvedBy?: Types.ObjectId;
     resolvedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+// Payment types
+export interface IPayment extends Document {
+    _id: Types.ObjectId;
+    userId: Types.ObjectId;
+    borrowingId: Types.ObjectId;
+    provider: 'vnpay';
+    status: 'pending' | 'success' | 'failed';
+    amount: number;
+    txnRef: string;
+    vnpTxnNo?: string;
+    vnpResponseCode?: string;
+    paidAt?: Date;
+    rawResponse?: Record<string, unknown>;
     createdAt: Date;
     updatedAt: Date;
 }

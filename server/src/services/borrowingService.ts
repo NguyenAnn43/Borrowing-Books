@@ -508,9 +508,9 @@ export const renewBorrowing = async (id: string, userId: string): Promise<IBorro
  * Mark a borrowing's fine as paid (librarian/admin only).
  * Also clears user.isFined flag if all fines are now paid.
  */
-export const payFine = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+export const payFine = async (id: string, requestingUser?: IUser): Promise<IBorrowing> => {
     // Librarians must be assigned to a library
-    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+    if (requestingUser?.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
         throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
     }
 
@@ -518,11 +518,22 @@ export const payFine = async (id: string, requestingUser: IUser): Promise<IBorro
     if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
     // Librarians can only manage borrowings for their own library
-    if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+    if (requestingUser?.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
         if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
             throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
         }
     }
+
+    return markFineAsPaidByBorrowingId(id);
+};
+
+/**
+ * Mark a borrowing fine as paid by borrowing ID.
+ * Shared by librarian manual action and VNPay callback.
+ */
+export const markFineAsPaidByBorrowingId = async (id: string): Promise<IBorrowing> => {
+    const borrowing = await Borrowing.findById(id) as IBorrowing | null;
+    if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
     if (!borrowing.isFined) {
         throw new AppError('This borrowing has no outstanding fine', 400, 'NO_FINE');
@@ -535,14 +546,12 @@ export const payFine = async (id: string, requestingUser: IUser): Promise<IBorro
     borrowing.finePaid = true;
     await borrowing.save();
 
-    // Check if user still has any unpaid fines
     const unpaidFines = await Borrowing.countDocuments({
         userId: borrowing.userId,
         isFined: true,
         finePaid: false,
     });
 
-    // If no more unpaid fines, clear user.isFined flag
     if (unpaidFines === 0) {
         await User.findByIdAndUpdate(borrowing.userId, { isFined: false });
     }

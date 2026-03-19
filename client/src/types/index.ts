@@ -195,6 +195,28 @@ export interface ILibrarianReviewDashboard {
     withImages: ILibrarianReviewDashboardItem[];
 }
 
+export interface IPayment {
+    _id: string;
+    userId?: Pick<IUser, "_id" | "fullName" | "email">;
+    borrowingId?: {
+        _id: string;
+        bookId?: Pick<IBook, "_id" | "title" | "author">;
+        dueDate?: string;
+        fineAmount?: number;
+        status?: IBorrowing["status"];
+        finePaid?: boolean;
+    };
+    provider: "vnpay";
+    status: "pending" | "success" | "failed";
+    amount: number;
+    txnRef: string;
+    vnpTxnNo?: string;
+    vnpResponseCode?: string;
+    paidAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 // Auth types
 export interface ILoginRequest {
     email: string;
