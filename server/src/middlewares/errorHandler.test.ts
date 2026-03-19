@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Request, Response } from 'express';
 import { errorHandler } from './errorHandler';
 import { AppError } from '../utils';
 
@@ -7,12 +6,12 @@ describe('errorHandler duplicate key mapping', () => {
     const req = {
         originalUrl: '/api/books',
         method: 'POST',
-    } as unknown as Request;
+    } as unknown;
 
     const res = {
         status: vi.fn().mockReturnThis(),
         json: vi.fn(),
-    } as unknown as Response;
+    } as unknown;
 
     const next = vi.fn();
 

@@ -24,7 +24,7 @@ export function useSearch(options: UseSearchOptions = {}) {
     return () => clearTimeout(timer);
   }, [searchTerm, debounceMs]);
 
-  // Derive isSearching from whether searchTerm differs from debouncedTerm
+  // Compute isSearching: true while a debounce is pending
   const isSearching = searchTerm !== debouncedTerm;
 
   // Reset search

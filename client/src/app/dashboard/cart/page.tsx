@@ -19,14 +19,14 @@ const getApiErrorCode = (err: unknown): string | undefined => {
 const getApiErrorMessage = (err: unknown): string | undefined => {
     if (!err || typeof err !== "object") return undefined;
 
-    const errorObj = err as {
+    const asAny = err as {
         message?: string;
         response?: { data?: { error?: { message?: string }; message?: string } };
     };
 
-    return errorObj.response?.data?.error?.message
-        || errorObj.response?.data?.message
-        || errorObj.message;
+    return asAny.response?.data?.error?.message
+        || asAny.response?.data?.message
+        || asAny.message;
 };
 
 export default function CartPage() {
