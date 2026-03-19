@@ -24,7 +24,7 @@ export interface GetBookAlternativesResponse {
 
 export const bookService = {
     /**
-     * Get all books with filters
+     * Get all books with filters and pagination
      */
     getBooks: async (params: GetBooksParams = {}): Promise<GetBooksResponse> => {
         const response = await api.get<ApiResponse<IBook[]>>("/books", { params });
