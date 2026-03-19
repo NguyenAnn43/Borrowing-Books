@@ -3,7 +3,12 @@ import { User } from '../models';
 import { AppError } from '../utils';
 import config from '../config/env';
 import { IUser } from '../types';
-import { RegisterInput } from '../validators/authSchema';
+import { ChangePasswordInput, RegisterInput } from '../validators/authSchema';
+import {
+    requestRegisterOtp as requestRegisterOtpService,
+    verifyRegisterOtp as verifyRegisterOtpService,
+    consumeEmailVerification,
+} from './registerVerificationService';
 
 interface TokenPair {
     accessToken: string;
@@ -39,6 +44,8 @@ const generateTokens = (userId: string): TokenPair => {
  * Register a new user
  */
 export const register = async (userData: RegisterInput): Promise<AuthResult> => {
+    consumeEmailVerification(userData.email, userData.emailVerificationToken);
+
     // Check if email already exists
     const existingUser = await User.findOne({ email: userData.email });
     if (existingUser) {
@@ -46,7 +53,12 @@ export const register = async (userData: RegisterInput): Promise<AuthResult> => 
     }
 
     // Create user
-    const user = await User.create(userData) as IUser;
+    const user = await User.create({
+        email: userData.email,
+        password: userData.password,
+        fullName: userData.fullName,
+        phone: userData.phone,
+    }) as IUser;
 
     // Generate tokens
     const tokens = generateTokens(user._id.toString());
@@ -59,6 +71,28 @@ export const register = async (userData: RegisterInput): Promise<AuthResult> => 
         user,
         ...tokens,
     };
+};
+
+/**
+ * Request OTP code for register email verification
+ */
+export const requestRegisterOtp = async (email: string, requestIp?: string): Promise<{ expiresInSeconds: number }> => {
+    const existingUser = await User.findOne({ email: email.trim().toLowerCase() });
+    if (existingUser) {
+        throw new AppError('Email already registered', 400, 'EMAIL_EXISTS');
+    }
+
+    return requestRegisterOtpService(email, requestIp);
+};
+
+/**
+ * Verify OTP code for register email verification
+ */
+export const verifyRegisterOtp = async (
+    email: string,
+    otpCode: string
+): Promise<{ verificationToken: string; expiresInSeconds: number }> => {
+    return verifyRegisterOtpService(email, otpCode);
 };
 
 /**
@@ -144,4 +178,32 @@ export const getCurrentUser = async (userId: string): Promise<IUser> => {
         throw new AppError('User not found', 404, 'USER_NOT_FOUND');
     }
     return user;
+};
+
+/**
+ * Change current user password
+ */
+export const changePassword = async (
+    userId: string,
+    data: ChangePasswordInput
+): Promise<boolean> => {
+    const user = await User.findById(userId).select('+password') as IUser | null;
+    if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+    }
+
+    const { currentPassword, newPassword } = data;
+    const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+    if (!isCurrentPasswordValid) {
+        throw new AppError('Current password is incorrect', 400, 'INVALID_CURRENT_PASSWORD');
+    }
+
+    const isSameAsOld = await user.comparePassword(newPassword);
+    if (isSameAsOld) {
+        throw new AppError('New password must be different from current password', 400, 'PASSWORD_UNCHANGED');
+    }
+
+    user.password = newPassword;
+    await user.save();
+    return true;
 };

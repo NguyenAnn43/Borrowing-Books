@@ -8,9 +8,10 @@ export interface CreateBorrowingData {
 }
 
 export interface GetBorrowingsParams {
+    q?: string;
     page?: number;
     limit?: number;
-    status?: "pending" | "borrowed" | "returned" | "overdue";
+    status?: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
     libraryId?: string;
     userId?: string;
 }
@@ -30,7 +31,7 @@ export const borrowingService = {
     /**
      * Get my borrowings (user)
      */
-    getMyBorrowings: async (params: { page?: number; limit?: number; status?: string } = {}) => {
+    getMyBorrowings: async (params: { page?: number; limit?: number; status?: string; q?: string } = {}) => {
         const response = await api.get<ApiResponse<IBorrowing[]>>("/borrowings/my", { params });
         return {
             borrowings: response.data.data,
@@ -55,6 +56,14 @@ export const borrowingService = {
     },
 
     /**
+     * Create bulk borrowing request
+     */
+    createBulkBorrowing: async (data: { bookIds: string[]; libraryId: string; notes?: string }): Promise<IBorrowing[]> => {
+        const response = await api.post<ApiResponse<IBorrowing[]>>("/borrowings/bulk", data);
+        return response.data.data;
+    },
+
+    /**
      * Confirm book pickup (librarian)
      */
     confirmPickup: async (id: string): Promise<IBorrowing> => {
@@ -67,6 +76,30 @@ export const borrowingService = {
      */
     returnBook: async (id: string): Promise<IBorrowing> => {
         const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/return`);
+        return response.data.data;
+    },
+
+    /**
+     * Pay fine (admin/librarian)
+     */
+    payFine: async (id: string): Promise<IBorrowing> => {
+        const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/pay-fine`);
+        return response.data.data;
+    },
+
+    /**
+     * Cancel pending borrowing (owner)
+     */
+    cancelBorrowing: async (id: string): Promise<IBorrowing> => {
+        const response = await api.delete<ApiResponse<IBorrowing>>(`/borrowings/${id}/cancel`);
+        return response.data.data;
+    },
+
+    /**
+     * Renew active borrowing (owner)
+     */
+    renewBorrowing: async (id: string): Promise<IBorrowing> => {
+        const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/renew`);
         return response.data.data;
     },
 };

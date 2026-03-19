@@ -69,21 +69,24 @@ export interface IWishlistItem {
 
 // Borrowing types
 export interface IBorrowing {
-  _id: string;
-  userId: Pick<IUser, "_id" | "fullName" | "email">;
-  bookId: Pick<IBook, "_id" | "title" | "author" | "coverImage">;
-  libraryId: Pick<ILibrary, "_id" | "name" | "code">;
-  borrowDate: string;
-  dueDate: string;
-  returnDate?: string;
-  actualReturnDate?: string;
-  status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
-  fineAmount: number;
-  isFined: boolean;
-  notes?: string;
-  overdueDays?: number;
-  createdAt: string;
-  updatedAt: string;
+    _id: string;
+    userId: Pick<IUser, "_id" | "fullName" | "email">;
+    bookId: Pick<IBook, "_id" | "title" | "author" | "coverImage">;
+    libraryId: Pick<ILibrary, "_id" | "name" | "code">;
+    borrowDate: string;
+    dueDate: string;
+    returnDate?: string;
+    actualReturnDate?: string;
+    status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
+    fineAmount: number;
+    isFined: boolean;
+    finePaid?: boolean;
+    renewalCount?: number;
+    maxRenewals?: number;
+    notes?: string;
+    overdueDays?: number;
+    createdAt: string;
+    updatedAt: string;
 }
 
 // Reservation types
@@ -110,6 +113,28 @@ export interface INotification {
     createdAt: string;
 }
 
+export interface IPayment {
+    _id: string;
+    userId?: Pick<IUser, "_id" | "fullName" | "email">;
+    borrowingId?: {
+        _id: string;
+        bookId?: Pick<IBook, "_id" | "title" | "author">;
+        dueDate?: string;
+        fineAmount?: number;
+        status?: IBorrowing["status"];
+        finePaid?: boolean;
+    };
+    provider: "vnpay";
+    status: "pending" | "success" | "failed";
+    amount: number;
+    txnRef: string;
+    vnpTxnNo?: string;
+    vnpResponseCode?: string;
+    paidAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 // Auth types
 export interface ILoginRequest {
     email: string;
@@ -118,9 +143,19 @@ export interface ILoginRequest {
 
 export interface IRegisterRequest {
     email: string;
+    emailVerificationToken: string;
     password: string;
     fullName: string;
     phone?: string;
+}
+
+export interface IRequestRegisterOtpResponse {
+    expiresInSeconds: number;
+}
+
+export interface IVerifyRegisterOtpResponse {
+    verificationToken: string;
+    expiresInSeconds: number;
 }
 
 export interface IAuthResponse {

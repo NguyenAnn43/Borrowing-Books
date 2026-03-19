@@ -1,7 +1,7 @@
 import { Router, IRouter } from 'express';
 import { borrowingController } from '../controllers';
 import { protect, authorize, validate } from '../middlewares';
-import { createBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema } from '../validators';
+import { createBorrowingSchema, createBulkBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema } from '../validators';
 import { ROLES } from '../utils';
 
 const router: IRouter = Router();
@@ -20,8 +20,17 @@ router.post(
     borrowingController.createBorrowing
 );
 
-/** PUT /borrowings/:id/cancel — owner cancels a PENDING request */
-router.put(
+/** POST /borrowings/bulk — user creates a bulk borrow request */
+router.post(
+    '/bulk',
+    protect,
+    authorize(ROLES.USER),
+    validate(createBulkBorrowingSchema),
+    borrowingController.createBulkBorrowing
+);
+
+/** DELETE /borrowings/:id/cancel — owner cancels a PENDING request */
+router.delete(
     '/:id/cancel',
     protect,
     validate(updateBorrowingSchema),
@@ -59,7 +68,7 @@ router.get(
 router.put(
     '/:id/confirm',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.confirmPickup
 );
@@ -68,7 +77,7 @@ router.put(
 router.put(
     '/:id/return',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.returnBook
 );
@@ -77,7 +86,7 @@ router.put(
 router.put(
     '/:id/pay-fine',
     protect,
-    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.payFine
 );

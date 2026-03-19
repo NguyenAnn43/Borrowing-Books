@@ -3,12 +3,13 @@ import { Borrowing, Book, User } from '../models';
 import * as notificationService from './notificationService';
 import * as bookService from './bookService';
 import * as reservationService from './reservationService';
+import logger from '../utils/logger';
 import {
     AppError, formatPagination, generateDueDate, calculateOverdueDays, calculateFine,
     BORROWING_STATUS, BORROWING_SETTINGS, PAGINATION, NOTIFICATION_TYPE,
 } from '../utils';
 import { IBorrowing, IBook, IUser, PaginationMeta } from '../types';
-import { GetBorrowingsQuery, CreateBorrowingInput } from '../validators/borrowingSchema';
+import { GetBorrowingsQuery, CreateBorrowingInput, CreateBulkBorrowingInput } from '../validators/borrowingSchema';
 import { ROLES } from '../utils/constants';
 
 interface GetBorrowingsResult {
@@ -31,31 +32,59 @@ const toId = (field: Types.ObjectId | { _id: Types.ObjectId } | unknown): string
 
 /**
  * Get all borrowings with pagination and filters (admin/librarian)
- * For librarians: automatically filtered to their library only
+ * Librarians can only see borrowings for their own library
  */
 export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: IUser): Promise<GetBorrowingsResult> => {
-    const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
+    const { q, page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
 
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
     if (userId) query.userId = userId;
 
-    // [UPDATED] For librarians, enforce their own library filter
-    if (requestingUser.role === ROLES.LIBRARIAN) {
-        if (!requestingUser.libraryId) {
-            throw new AppError('Librarian must have a library assigned', 400, 'NO_LIBRARY_ASSIGNED');
-        }
-        query.libraryId = requestingUser.libraryId.toString();
-    } else if (libraryId) {
-        // Admins can filter by any libraryId
+    // Librarians can only view borrowings for their own library
+    if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+        query.libraryId = requestingUser.libraryId;
+    } else if (libraryId && requestingUser.role === ROLES.ADMIN) {
+        // Only admins can filter by different libraries
         query.libraryId = libraryId;
+    }
+
+    // Add search by book title or user name
+    if (q) {
+        const searchQuery = { $regex: q, $options: 'i' };
+        // Search in related collections
+        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
+        const bookIds = matchingBooks.map((b) => b._id);
+        if (bookIds.length > 0) {
+            query.bookId = { $in: bookIds };
+        } else {
+            // Also try text search in users
+            const matchingUsers = await User.find({ $text: { $search: q } }).select('_id');
+            if (matchingUsers.length > 0) {
+                query.userId = { $in: matchingUsers.map((u) => u._id) };
+            } else {
+                // If no matches, return empty result
+                return { borrowings: [], pagination: formatPagination(page, limit, 0) };
+            }
+        }
     }
 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
 
     const [borrowings, total] = await Promise.all([
-        Borrowing.find(query).skip(skip).limit(actualLimit).sort({ createdAt: -1 }) as Promise<IBorrowing[]>,
+        Borrowing.find(query)
+            .skip(skip)
+            .limit(actualLimit)
+            .sort({ createdAt: -1 })
+            .populate('bookId', 'title author')
+            .populate('userId', 'name email')
+            .populate('libraryId', 'name') as Promise<IBorrowing[]>,
         Borrowing.countDocuments(query),
     ]);
 
@@ -63,18 +92,37 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
 };
 
 /**
- * Get user's own borrowings
+ * Get user's own borrowings with optional search
  */
 export const getMyBorrowings = async (
     userId: string,
-    params: { page?: number; limit?: number; status?: string } = {}
+    params: { page?: number; limit?: number; status?: string; q?: string } = {}
 ): Promise<GetBorrowingsResult> => {
-    const { page = 1, limit = 10, status } = params;
+    const { q, page = 1, limit = 10, status } = params;
     const query: Record<string, unknown> = { userId };
     if (status) query.status = status;
 
+    // Add search by book title
+    if (q) {
+        const searchQuery = { $regex: q, $options: 'i' };
+        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
+        const bookIds = matchingBooks.map((b) => b._id);
+        if (bookIds.length > 0) {
+            query.bookId = { $in: bookIds };
+        } else {
+            // If no matches, return empty result
+            return { borrowings: [], pagination: formatPagination(page, limit, 0) };
+        }
+    }
+
     const [borrowings, total] = await Promise.all([
-        Borrowing.find(query).skip((page - 1) * limit).limit(limit).sort({ createdAt: -1 }) as Promise<IBorrowing[]>,
+        Borrowing.find(query)
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .sort({ createdAt: -1 })
+            .populate('bookId', 'title author')
+            .populate('userId', 'name email')
+            .populate('libraryId', 'name') as Promise<IBorrowing[]>,
         Borrowing.countDocuments(query),
     ]);
 
@@ -82,7 +130,7 @@ export const getMyBorrowings = async (
 };
 
 /**
- * Get borrowing by ID — enforces ownership: owner | librarian (own library) | admin only.
+ * Get borrowing by ID — enforces ownership: owner | librarian | admin only.
  */
 export const getBorrowingById = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
     const borrowing = await Borrowing.findById(id) as IBorrowing | null;
@@ -92,20 +140,9 @@ export const getBorrowingById = async (id: string, requestingUser: IUser): Promi
     }
 
     const isOwner = toId(borrowing.userId) === requestingUser._id.toString();
-    const isAdmin = requestingUser.role === ROLES.ADMIN;
-    const isLibrarian = requestingUser.role === ROLES.LIBRARIAN;
+    const isLibrarianOrAdmin = (requestingUser.role === ROLES.LIBRARIAN || requestingUser.role === ROLES.ADMIN);
 
-    // [UPDATED] For librarians, also check library match
-    if (isLibrarian) {
-        if (!requestingUser.libraryId) {
-            throw new AppError('Librarian must have a library assigned', 400, 'NO_LIBRARY_ASSIGNED');
-        }
-        if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
-            throw new AppError('You cannot access borrowings from other libraries', 403, 'FORBIDDEN');
-        }
-    }
-
-    if (!isOwner && !isAdmin && !isLibrarian) {
+    if (!isOwner && !isLibrarianOrAdmin) {
         throw new AppError('You are not authorized to view this borrowing', 403, 'FORBIDDEN');
     }
 
@@ -116,7 +153,6 @@ export const getBorrowingById = async (id: string, requestingUser: IUser): Promi
 
 /**
  * Create borrowing request — validates libraryId belongs to the book.
- * Decrements availableCopies immediately when creating pending borrowing.
  */
 export const createBorrowing = async (userId: string, data: CreateBorrowingInput): Promise<IBorrowing> => {
     const { bookId, libraryId, notes } = data;
@@ -140,6 +176,15 @@ export const createBorrowing = async (userId: string, data: CreateBorrowingInput
     const user = await User.findById(userId) as IUser | null;
     if (!user) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
 
+    // Check if user has outstanding fines
+    if (user.isFined) {
+        throw new AppError(
+            'You have outstanding fines. Please pay all pending fines before borrowing more books.',
+            400,
+            'USER_HAS_FINES'
+        );
+    }
+
     const activeBorrowings = await Borrowing.countDocuments({
         userId,
         status: { $in: [BORROWING_STATUS.PENDING, BORROWING_STATUS.BORROWED] },
@@ -162,16 +207,13 @@ export const createBorrowing = async (userId: string, data: CreateBorrowingInput
         throw new AppError('You already have this book borrowed', 400, 'ALREADY_BORROWED');
     }
 
-    // [NEW] Decrement availableCopies when creating pending borrowing
-    await bookService.decrementAvailabilityAtomic(bookId);
-
     const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
     const borrowing = await Borrowing.create({ userId, bookId, libraryId, dueDate, notes, status: BORROWING_STATUS.PENDING }) as IBorrowing;
 
     await notificationService.create({
         userId,
-        title: 'Borrowing Request Created',
-        message: `Your request to borrow "${book.title}" has been submitted.`,
+        title: 'Yêu cầu mượn sách',
+        message: `Yêu cầu mượn "${book.title}" đã được gửi thành công.`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -179,34 +221,134 @@ export const createBorrowing = async (userId: string, data: CreateBorrowingInput
 };
 
 /**
- * Confirm book pickup (librarian action).
- * Changes status from PENDING to BORROWED.
- * NOTE: availableCopies was already decremented when borrowing was created, so NO further decrement here.
- * For librarians: only their own library's borrowings can be confirmed.
+ * Create bulk borrowing request for multiple books at once.
  */
-export const confirmPickup = async (id: string, requestingUser?: IUser): Promise<IBorrowing> => {
+export const createBulkBorrowing = async (userId: string, data: CreateBulkBorrowingInput): Promise<IBorrowing[]> => {
+    const { bookIds, libraryId, notes } = data;
+
+    // Remove duplicate book IDs if any
+    const uniqueBookIds = [...new Set(bookIds)];
+
+    const user = await User.findById(userId) as IUser | null;
+    if (!user) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+
+    // Check if user has outstanding fines
+    if (user.isFined) {
+        throw new AppError(
+            'You have outstanding fines. Please pay all pending fines before borrowing more books.',
+            400,
+            'USER_HAS_FINES'
+        );
+    }
+
+    const activeBorrowingsCount = await Borrowing.countDocuments({
+        userId,
+        status: { $in: [BORROWING_STATUS.PENDING, BORROWING_STATUS.BORROWED] },
+    });
+
+    if (activeBorrowingsCount + uniqueBookIds.length > user.maxBorrowLimit) {
+        throw new AppError(
+            `Bulk request exceeds your borrow limit. You can only borrow ${user.maxBorrowLimit - activeBorrowingsCount} more book(s).`,
+            400,
+            'BORROW_LIMIT_REACHED'
+        );
+    }
+
+    const books = await Book.find({ _id: { $in: uniqueBookIds } }) as IBook[];
+    if (books.length !== uniqueBookIds.length) {
+        throw new AppError('One or more books not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    // Validate all books
+    for (const book of books) {
+        if (book.libraryId.toString() !== libraryId) {
+            throw new AppError(
+                `Book "${book.title}" is not available at the selected library`,
+                400,
+                'LIBRARY_MISMATCH'
+            );
+        }
+        if (book.availableCopies <= 0) {
+            throw new AppError(`Book "${book.title}" is not available`, 400, 'BOOK_UNAVAILABLE');
+        }
+    }
+
+    const existingBorrowings = await Borrowing.find({
+        userId,
+        bookId: { $in: uniqueBookIds },
+        status: { $in: [BORROWING_STATUS.PENDING, BORROWING_STATUS.BORROWED] },
+    });
+
+    if (existingBorrowings.length > 0) {
+        throw new AppError('You already have one or more of these books borrowed or pending', 400, 'ALREADY_BORROWED');
+    }
+
+    const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
+    
+    const borrowingsToCreate = uniqueBookIds.map(bookId => ({
+        userId,
+        bookId,
+        libraryId,
+        dueDate,
+        notes,
+        status: BORROWING_STATUS.PENDING
+    }));
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    let borrowings: IBorrowing[];
+    try {
+        borrowings = await Borrowing.insertMany(borrowingsToCreate, { session }) as unknown as IBorrowing[];
+        await session.commitTransaction();
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+
+    await notificationService.create({
+        userId,
+        title: 'Yêu cầu mượn sách',
+        message: `Yêu cầu mượn ${borrowings.length} cuốn sách đã được gửi thành công.`,
+        type: NOTIFICATION_TYPE.BORROWING,
+    });
+
+    return borrowings;
+};
+
+/**
+ * Confirm book pickup (librarian action).
+ * Uses a Mongoose transaction to atomically decrement stock and flip Borrowing status.
+ */
+export const confirmPickup = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
         if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
-        
-        // [UPDATED] For librarians, check library access
-        if (requestingUser && requestingUser.role === ROLES.LIBRARIAN) {
-            if (!requestingUser.libraryId) {
-                throw new AppError('Librarian must have a library assigned', 400, 'NO_LIBRARY_ASSIGNED');
-            }
+
+        // Librarians can only manage borrowings for their own library
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
             if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
-                throw new AppError('You can only confirm pickups for your own library', 403, 'FORBIDDEN');
+                throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
             }
         }
-        
+
         if (borrowing.status !== BORROWING_STATUS.PENDING) {
             throw new AppError('Invalid borrowing status', 400, 'INVALID_STATUS');
         }
 
-        // [UPDATED] No need to decrement here since it was already done in createBorrowing
+        // [P0] Atomic decrement — throws BOOK_UNAVAILABLE if no copies left
+        await bookService.decrementAvailabilityAtomic(toId(borrowing.bookId), session);
+
         const now = new Date();
         borrowing.status = BORROWING_STATUS.BORROWED;
         borrowing.borrowDate = now;
@@ -218,8 +360,8 @@ export const confirmPickup = async (id: string, requestingUser?: IUser): Promise
         // Notification outside transaction (non-critical)
         await notificationService.create({
             userId: toId(borrowing.userId),
-            title: 'Book Picked Up',
-            message: `You have picked up the book. Due date: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
+            title: 'Nhận sách thành công',
+            message: `Bạn đã nhận sách. Hạn trả: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
             type: NOTIFICATION_TYPE.BORROWING,
         });
 
@@ -235,26 +377,28 @@ export const confirmPickup = async (id: string, requestingUser?: IUser): Promise
 /**
  * Record book return (librarian action).
  * Uses a Mongoose transaction to atomically restore stock and finalize Borrowing.
- * For librarians: only their own library's borrowings can be returned.
+ * Librarians can only process returns for borrowings in their library.
  */
-export const returnBook = async (id: string, requestingUser?: IUser): Promise<IBorrowing> => {
+export const returnBook = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
         const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
         if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
-        
-        // [UPDATED] For librarians, check library access
-        if (requestingUser && requestingUser.role === ROLES.LIBRARIAN) {
-            if (!requestingUser.libraryId) {
-                throw new AppError('Librarian must have a library assigned', 400, 'NO_LIBRARY_ASSIGNED');
-            }
+
+        // Librarians can only manage borrowings for their own library
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
             if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
-                throw new AppError('You can only process returns for your own library', 403, 'FORBIDDEN');
+                throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
             }
         }
-        
+
         if (borrowing.status !== BORROWING_STATUS.BORROWED && borrowing.status !== BORROWING_STATUS.OVERDUE) {
             throw new AppError('Invalid borrowing status', 400, 'INVALID_STATUS');
         }
@@ -263,10 +407,16 @@ export const returnBook = async (id: string, requestingUser?: IUser): Promise<IB
         if (overdueDays > 0) {
             borrowing.fineAmount = calculateFine(overdueDays, BORROWING_SETTINGS.OVERDUE_FINE_PER_DAY);
             borrowing.isFined = true;
+            // Update user.isFined flag when book is returned late
+            await User.findByIdAndUpdate(borrowing.userId, { isFined: true }, { session });
+            // Keep status as OVERDUE if book is returned late
+            borrowing.status = BORROWING_STATUS.OVERDUE;
+        } else {
+            // Set status to RETURNED if book is returned on time
+            borrowing.status = BORROWING_STATUS.RETURNED;
         }
 
         const now = new Date();
-        borrowing.status = BORROWING_STATUS.RETURNED;
         borrowing.actualReturnDate = now;
         // returnDate is mirrored automatically in pre-save hook
         await borrowing.save({ session });
@@ -276,27 +426,25 @@ export const returnBook = async (id: string, requestingUser?: IUser): Promise<IB
 
         await session.commitTransaction();
 
+        // Check for pending reservations and auto-fulfill the earliest one
+        try {
+            await reservationService.autoFulfillPendingReservation(toId(borrowing.bookId));
+        } catch (reservationErr) {
+            // Log the error but don't fail the return operation
+            logger.error('[returnBook] Failed to auto-fulfill pending reservation', reservationErr);
+        }
+
         // Notification outside transaction
-        let message = 'You have returned the book.';
+        let message = 'Bạn đã trả sách thành công.';
         if (borrowing.isFined) {
-            message += ` Fine amount: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND. Please pay at the library.`;
+            message += ` Tiền phạt: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND. Vui lòng thanh toán tại thư viện.`;
         }
         await notificationService.create({
             userId: toId(borrowing.userId),
-            title: 'Book Returned',
+            title: 'Trả sách thành công',
             message,
             type: NOTIFICATION_TYPE.BORROWING,
         });
-
-        // [NEW] Auto-fulfill pending reservations when book becomes available
-        // This will create a borrowing for the earliest pending reservation and mark it as completed
-        try {
-            const bookId = toId(borrowing.bookId);
-            await reservationService.autoFulfillNextReservation(bookId);
-        } catch (error) {
-            // Log error but don't fail the return process
-            console.error('[ERROR] Failed to auto-fulfill reservation after book return:', error);
-        }
 
         return borrowing;
     } catch (err) {
@@ -311,7 +459,6 @@ export const returnBook = async (id: string, requestingUser?: IUser): Promise<IB
 
 /**
  * Cancel a pending borrowing request (owner only).
- * Increments availableCopies back when cancelling.
  */
 export const cancelBorrowing = async (id: string, userId: string): Promise<IBorrowing> => {
     const borrowing = await Borrowing.findById(id) as IBorrowing | null;
@@ -325,27 +472,15 @@ export const cancelBorrowing = async (id: string, userId: string): Promise<IBorr
         throw new AppError('Only pending borrowings can be cancelled', 400, 'INVALID_STATUS');
     }
 
-    // [NEW] Increment availableCopies back when cancelling
-    await bookService.incrementAvailabilityAtomic(toId(borrowing.bookId));
-
     borrowing.status = BORROWING_STATUS.CANCELLED;
     await borrowing.save();
 
     await notificationService.create({
         userId,
-        title: 'Borrowing Cancelled',
-        message: 'Your borrowing request has been cancelled.',
+        title: 'Hủy yêu cầu mượn',
+        message: 'Yêu cầu mượn sách của bạn đã được hủy.',
         type: NOTIFICATION_TYPE.BORROWING,
     });
-
-    // [NEW] Auto-fulfill pending reservations when book becomes available after cancellation
-    try {
-        const bookId = toId(borrowing.bookId);
-        await reservationService.autoFulfillNextReservation(bookId);
-    } catch (error) {
-        // Log error but don't fail the cancellation process
-        console.error('[ERROR] Failed to auto-fulfill reservation after borrowing cancellation:', error);
-    }
 
     return borrowing;
 };
@@ -380,8 +515,8 @@ export const renewBorrowing = async (id: string, userId: string): Promise<IBorro
 
     await notificationService.create({
         userId,
-        title: 'Borrowing Renewed',
-        message: `Your borrowing has been renewed. New due date: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
+        title: 'Gia hạn thành công',
+        message: `Yêu cầu mượn sách của bạn đã được gia hạn. Hạn trả mới: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -390,21 +525,34 @@ export const renewBorrowing = async (id: string, userId: string): Promise<IBorro
 
 /**
  * Mark a borrowing's fine as paid (librarian/admin only).
- * For librarians: only their own library's fines can be marked as paid.
+ * Also clears user.isFined flag if all fines are now paid.
  */
 export const payFine = async (id: string, requestingUser?: IUser): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser?.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const borrowing = await Borrowing.findById(id) as IBorrowing | null;
     if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
-    // [UPDATED] For librarians, check library access
-    if (requestingUser && requestingUser.role === ROLES.LIBRARIAN) {
-        if (!requestingUser.libraryId) {
-            throw new AppError('Librarian must have a library assigned', 400, 'NO_LIBRARY_ASSIGNED');
-        }
+    // Librarians can only manage borrowings for their own library
+    if (requestingUser?.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
         if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
-            throw new AppError('You can only manage fines for your own library', 403, 'FORBIDDEN');
+            throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
         }
     }
+
+    return markFineAsPaidByBorrowingId(id);
+};
+
+/**
+ * Mark a borrowing fine as paid by borrowing ID.
+ * Shared by librarian manual action and VNPay callback.
+ */
+export const markFineAsPaidByBorrowingId = async (id: string): Promise<IBorrowing> => {
+    const borrowing = await Borrowing.findById(id) as IBorrowing | null;
+    if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
     if (!borrowing.isFined) {
         throw new AppError('This borrowing has no outstanding fine', 400, 'NO_FINE');
@@ -417,10 +565,20 @@ export const payFine = async (id: string, requestingUser?: IUser): Promise<IBorr
     borrowing.finePaid = true;
     await borrowing.save();
 
+    const unpaidFines = await Borrowing.countDocuments({
+        userId: borrowing.userId,
+        isFined: true,
+        finePaid: false,
+    });
+
+    if (unpaidFines === 0) {
+        await User.findByIdAndUpdate(borrowing.userId, { isFined: false });
+    }
+
     await notificationService.create({
         userId: toId(borrowing.userId),
-        title: 'Fine Paid',
-        message: `Your fine of ${borrowing.fineAmount.toLocaleString('vi-VN')} VND has been recorded as paid.`,
+        title: 'Thanh toán phạt thành công',
+        message: `Tiền phạt ${borrowing.fineAmount.toLocaleString('vi-VN')} VND đã được ghi nhận.`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -460,67 +618,4 @@ export const checkAndMarkOverdue = async (): Promise<number> => {
         ]
     );
     return result.modifiedCount;
-};
-
-/**
- * Auto-cancel pending borrowings that are older than 24 hours.
- * Also increments availableCopies back for each cancelled borrowing.
- * Called by scheduler.
- * 
- * FIX: Use getTime() for UTC-consistent comparison to avoid timezone mismatch
- */
-export const autoCancelExpiredPending = async (): Promise<number> => {
-    // Calculate 24 hours ago in milliseconds (UTC-consistent)
-    const nowMs = Date.now();
-    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-    const twentyFourHoursAgoMs = nowMs - twentyFourHoursMs;
-
-    console.log('[DEBUG] Checking for expired pending borrowings');
-    console.log('[DEBUG] Current time (UTC):', new Date(nowMs).toISOString());
-    console.log('[DEBUG] 24h ago (UTC):', new Date(twentyFourHoursAgoMs).toISOString());
-
-    // Find expired pending borrowings using milliseconds for accurate UTC comparison
-    const expiredBorrowings = await Borrowing.find({
-        status: BORROWING_STATUS.PENDING,
-        createdAt: { $lt: new Date(twentyFourHoursAgoMs) },
-    }) as IBorrowing[];
-
-    console.log(`[DEBUG] Found ${expiredBorrowings.length} expired pending borrowing(s)`);
-    expiredBorrowings.forEach((b) => {
-        const ageMs = nowMs - b.createdAt.getTime();
-        const ageHours = (ageMs / (60 * 60 * 1000)).toFixed(2);
-        console.log(`[DEBUG] Borrowing ${b._id}: createdAt=${b.createdAt.toISOString()}, age=${ageHours}h, status=${b.status}`);
-    });
-
-    let cancelledCount = 0;
-
-    for (const borrowing of expiredBorrowings) {
-        try {
-            console.log(`[DEBUG] Auto-cancelling borrowing ${borrowing._id}...`);
-            // Increment availableCopies back
-            await bookService.incrementAvailabilityAtomic(toId(borrowing.bookId));
-
-            // Update borrowing status to cancelled
-            borrowing.status = BORROWING_STATUS.CANCELLED;
-            await borrowing.save();
-
-            console.log(`[DEBUG] Successfully cancelled borrowing ${borrowing._id}`);
-
-            // Send notification
-            await notificationService.create({
-                userId: toId(borrowing.userId),
-                title: 'Borrowing Request Expired',
-                message: 'Your borrowing request has been automatically cancelled as it was not picked up within 24 hours.',
-                type: NOTIFICATION_TYPE.BORROWING,
-            });
-
-            cancelledCount++;
-        } catch (error) {
-            // Log error but continue processing other borrowings
-            console.error(`[ERROR] Failed to auto-cancel borrowing ${borrowing._id}:`, error);
-        }
-    }
-
-    console.log(`[DEBUG] Auto-cancel completed. Total cancelled: ${cancelledCount}`);
-    return cancelledCount;
 };

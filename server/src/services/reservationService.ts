@@ -25,19 +25,51 @@ const toId = (field: unknown): string => {
 
 /**
  * Get all reservations — librarian/admin
+ * Librarians can only see reservations for their own library
  */
-export const getReservations = async (params: GetReservationsQuery): Promise<GetReservationsResult> => {
-    const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
+export const getReservations = async (params: GetReservationsQuery, requestingUser: IUser): Promise<GetReservationsResult> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === 'librarian' && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
+    const { q, page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
-    if (libraryId) query.libraryId = libraryId;
     if (userId) query.userId = userId;
+
+    // Librarians can only view reservations for their own library
+    if (requestingUser.role === 'librarian' && requestingUser.libraryId) {
+        query.libraryId = requestingUser.libraryId;
+    } else if (libraryId && requestingUser.role === 'admin') {
+        // Only admins can filter by different libraries
+        query.libraryId = libraryId;
+    }
+
+    // Add search by book title
+    if (q) {
+        const searchQuery = { $regex: q, $options: 'i' };
+        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
+        const bookIds = matchingBooks.map((b) => b._id);
+        if (bookIds.length > 0) {
+            query.bookId = { $in: bookIds };
+        } else {
+            // If no matches, return empty result
+            return { reservations: [], pagination: formatPagination(page, limit, 0) };
+        }
+    }
 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
 
     const [reservations, total] = await Promise.all([
-        Reservation.find(query).skip(skip).limit(actualLimit).sort({ createdAt: -1 }) as Promise<IReservation[]>,
+        Reservation.find(query)
+            .skip(skip)
+            .limit(actualLimit)
+            .sort({ createdAt: -1 })
+            .populate('bookId', 'title author')
+            .populate('userId', 'name email')
+            .populate('libraryId', 'name') as Promise<IReservation[]>,
         Reservation.countDocuments(query),
     ]);
 
@@ -89,6 +121,15 @@ export const createReservation = async (userId: string, data: CreateReservationI
 
     const book = await Book.findById(bookId) as IBook | null;
     if (!book) throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+
+    // Real-world flow: reservation is only for books that are currently unavailable.
+    if (book.availableCopies > 0) {
+        throw new AppError(
+            'Book is currently available. Please borrow directly instead of reserving.',
+            400,
+            'BOOK_AVAILABLE_FOR_BORROWING'
+        );
+    }
 
     if (book.libraryId.toString() !== libraryId) {
         throw new AppError('The provided libraryId does not match the book\'s library', 400, 'LIBRARY_MISMATCH');
@@ -243,50 +284,40 @@ export const expireReservations = async (): Promise<number> => {
 };
 
 /**
- * Auto-fulfill pending reservations when a book becomes available.
- * Called after a book is returned.
- * 
- * Finds the earliest PENDING reservation for a given book (FIFO),
- * creates a Borrowing record, and marks the reservation as COMPLETED.
- * 
- * @param bookId - The book ID to process reservations for
- * @returns The updated reservation if one was fulfilled, or null if none exist
+ * Auto-fulfill the earliest pending reservation for a book.
+ * Called when a book is returned to automatically process the next reservation.
+ * Creates a PENDING borrowing record (staff must confirm pickup), marks reservation as COMPLETED, and sends notification.
+ *
+ * @param bookId - ID of the book that was returned
+ * @returns Reservation that was fulfilled, or null if no pending reservations
  */
-export const autoFulfillNextReservation = async (bookId: string): Promise<IReservation | null> => {
+export const autoFulfillPendingReservation = async (bookId: string | Types.ObjectId): Promise<IReservation | null> => {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        // Find the earliest PENDING reservation for this book
+        // Find the earliest pending reservation for this book
         const reservation = await Reservation.findOne({
-            bookId,
+            bookId: new Types.ObjectId(bookId),
             status: RESERVATION_STATUS.PENDING,
         }).sort({ reservationDate: 1 }).session(session) as IReservation | null;
 
         if (!reservation) {
-            await session.commitTransaction();
+            await session.abortTransaction();
             return null;
         }
 
-        // Check if book still has available copies
-        const book = await Book.findById(bookId).session(session) as IBook | null;
-        if (!book || book.availableCopies <= 0) {
-            await session.commitTransaction();
-            return null;
-        }
-
-        // Decrement stock atomically
-        await bookService.decrementAvailabilityAtomic(toId(reservation.bookId), session);
-
-        // Create borrowing record with BORROWED status
-        const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
+        // Create borrowing record with PENDING status (librarian must confirm pickup)
+        // Stock will be decremented when librarian confirms pickup
+        const now = new Date();
+        const dueDate = generateDueDate(now, BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
         const borrowingDocs = await Borrowing.create([{
             userId: reservation.userId,
             bookId: reservation.bookId,
             libraryId: reservation.libraryId,
+            borrowDate: now,
             dueDate,
-            status: BORROWING_STATUS.BORROWED,
-            borrowDate: new Date(),
+            status: BORROWING_STATUS.PENDING,
         }], { session }) as IBorrowing[];
         const borrowing = borrowingDocs[0];
 
@@ -294,18 +325,18 @@ export const autoFulfillNextReservation = async (bookId: string): Promise<IReser
             throw new AppError('Failed to create borrowing', 500, 'BORROWING_CREATE_FAILED');
         }
 
-        // Mark reservation as COMPLETED and link to borrowing
+        // Update reservation to COMPLETED
         reservation.status = RESERVATION_STATUS.COMPLETED;
         reservation.borrowingId = borrowing._id;
         await reservation.save({ session });
 
         await session.commitTransaction();
 
-        // Send notifications outside transaction
+        // Send notification to the user
         await notificationService.create({
             userId: toId(reservation.userId),
-            title: 'Your Book is Ready',
-            message: `Your reserved book is ready for pickup. Due date: ${dueDate.toLocaleDateString('vi-VN')}`,
+            title: 'Reserved Book Available - Await Confirmation',
+            message: `The book you reserved is now available for pickup. Please visit the library for confirmation and collection. Due date will be ${dueDate.toLocaleDateString('vi-VN')}.`,
             type: NOTIFICATION_TYPE.RESERVATION,
         });
 

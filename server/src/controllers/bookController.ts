@@ -33,6 +33,19 @@ export const getBookById = asyncHandler(async (req: AuthRequest, res: Response) 
 });
 
 /**
+ * Get alternative libraries for the same book
+ */
+export const getBookAlternatives = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const id = req.params.id as string;
+    const result = await bookService.getBookAlternatives(id, req.user?._id.toString());
+
+    res.json({
+        success: true,
+        data: result,
+    });
+});
+
+/**
  * Create new book
  */
 export const createBook = asyncHandler(async (req: Request, res: Response) => {

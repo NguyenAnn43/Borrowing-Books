@@ -20,6 +20,37 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * Request OTP for register email verification
+ */
+export const requestRegisterOtp = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const proxyIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0];
+    const requestIp = proxyIp?.trim() || req.ip;
+    const result = await authService.requestRegisterOtp(email, requestIp);
+
+    res.json({
+        success: true,
+        data: result,
+        message: 'OTP sent to email',
+    });
+});
+
+/**
+ * Verify OTP for register email verification
+ */
+export const verifyRegisterOtp = asyncHandler(async (req: Request, res: Response) => {
+    const { email, otpCode } = req.body;
+    const result = await authService.verifyRegisterOtp(email, otpCode);
+
+    res.json({
+        success: true,
+        data: result,
+        message: 'Email verified successfully',
+    });
+});
+
+/**
  * Login user
  */
 export const login = asyncHandler(async (req: Request, res: Response) => {
@@ -94,5 +125,17 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
     res.json({
         success: true,
         data: user,
+    });
+});
+
+/**
+ * Change password for current user
+ */
+export const changePassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    await authService.changePassword(req.user!._id.toString(), req.body);
+
+    res.json({
+        success: true,
+        message: 'Password changed successfully',
     });
 });

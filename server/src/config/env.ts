@@ -32,6 +32,21 @@ interface Config {
         apiKey?: string;
         apiSecret?: string;
     };
+    EMAIL: {
+        host?: string;
+        port: number;
+        secure: boolean;
+        user?: string;
+        pass?: string;
+        from: string;
+    };
+    CLIENT_URL: string;
+    VNPAY: {
+        TMN_CODE: string;
+        HASH_SECRET: string;
+        URL: string;
+        RETURN_URL: string;
+    };
 }
 
 const config: Config = {
@@ -66,6 +81,24 @@ const config: Config = {
         cloudName: process.env.CLOUDINARY_CLOUD_NAME,
         apiKey: process.env.CLOUDINARY_API_KEY,
         apiSecret: process.env.CLOUDINARY_API_SECRET,
+    },
+
+    EMAIL: {
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587', 10),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+        from: process.env.SMTP_FROM || 'no-reply@borrowingbooks.local',
+    },
+
+    CLIENT_URL: process.env.CLIENT_URL || process.env.CORS_ORIGIN || 'http://localhost:3000',
+
+    VNPAY: {
+        TMN_CODE: process.env.VNPAY_TMN_CODE || '',
+        HASH_SECRET: process.env.VNPAY_HASH_SECRET || '',
+        URL: process.env.VNPAY_URL || 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+        RETURN_URL: process.env.VNPAY_RETURN_URL || 'http://localhost:5001/api/payments/vnpay/return',
     },
 };
 
