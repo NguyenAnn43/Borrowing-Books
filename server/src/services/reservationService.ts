@@ -33,7 +33,7 @@ export const getReservations = async (params: GetReservationsQuery, requestingUs
         throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
     }
 
-    const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
+    const { q, page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
     if (userId) query.userId = userId;
@@ -46,11 +46,30 @@ export const getReservations = async (params: GetReservationsQuery, requestingUs
         query.libraryId = libraryId;
     }
 
+    // Add search by book title
+    if (q) {
+        const searchQuery = { $regex: q, $options: 'i' };
+        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
+        const bookIds = matchingBooks.map((b) => b._id);
+        if (bookIds.length > 0) {
+            query.bookId = { $in: bookIds };
+        } else {
+            // If no matches, return empty result
+            return { reservations: [], pagination: formatPagination(page, limit, 0) };
+        }
+    }
+
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
 
     const [reservations, total] = await Promise.all([
-        Reservation.find(query).skip(skip).limit(actualLimit).sort({ createdAt: -1 }) as Promise<IReservation[]>,
+        Reservation.find(query)
+            .skip(skip)
+            .limit(actualLimit)
+            .sort({ createdAt: -1 })
+            .populate('bookId', 'title author')
+            .populate('userId', 'name email')
+            .populate('libraryId', 'name') as Promise<IReservation[]>,
         Reservation.countDocuments(query),
     ]);
 

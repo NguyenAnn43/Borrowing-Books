@@ -105,17 +105,19 @@ export default function CartPage() {
                 router.push("/dashboard/borrowings");
             }
         } catch (err: any) {
-            console.error("Bulk borrowing error:", err.response?.data || err);
-            const errorCode = err.response?.data?.error?.code;
+            const errorData = err?.response?.data || err?.message || {};
+            console.error("Bulk borrowing error:", errorData);
+            const errorCode = err?.response?.data?.error?.code;
             const fallbackByCode: Record<string, string> = {
                 BORROW_LIMIT_REACHED: "Bạn đã đạt giới hạn số lượng sách được mượn.",
                 ALREADY_BORROWED: "Một hoặc nhiều sách đã có yêu cầu mượn trước đó.",
                 BOOK_UNAVAILABLE: "Một hoặc nhiều sách đã hết trước khi gửi yêu cầu.",
                 LIBRARY_MISMATCH: "Giỏ có sách không cùng thư viện. Vui lòng gửi theo từng thư viện.",
+                USER_HAS_FINES: "Bạn có tiền phạt chưa trả. Vui lòng thanh toán trước khi mượn sách khác.",
             };
             const errorMsg = fallbackByCode[errorCode]
-                || err.response?.data?.error?.message
-                || err.response?.data?.message
+                || err?.response?.data?.error?.message
+                || err?.response?.data?.message
                 || (err instanceof Error ? err.message : "Đã có lỗi xảy ra. Không thể tạo yêu cầu mượn sách.");
             setError(errorMsg);
         } finally {

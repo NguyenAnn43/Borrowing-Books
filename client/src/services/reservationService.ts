@@ -2,6 +2,7 @@ import api, { ApiResponse } from "@/lib/api";
 import type { IPagination, IReservation } from "@/types";
 
 export interface GetReservationsParams {
+    q?: string;
     page?: number;
     limit?: number;
     status?: "pending" | "ready" | "completed" | "cancelled" | "expired";

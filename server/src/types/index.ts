@@ -13,6 +13,7 @@ export interface IUser extends Document {
     libraryId?: Types.ObjectId;
     status: 'active' | 'inactive' | 'banned';
     maxBorrowLimit: number;
+    isFined: boolean;
     refreshToken?: string;
     createdAt: Date;
     updatedAt: Date;

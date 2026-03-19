@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bell, Loader2 } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { notificationService } from "@/services/notificationService";
+import { Pagination } from "@/components/ui/Pagination";
+import { usePagination } from "@/hooks";
 import type { INotification } from "@/types";
 
 export default function NotificationsPage() {
@@ -14,29 +16,41 @@ export default function NotificationsPage() {
     const [success, setSuccess] = useState<string | null>(null);
     const [unreadOnly, setUnreadOnly] = useState(false);
 
+    const { page, limit, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 10 });
+
     const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications]);
 
-    const fetchNotifications = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const { notifications: data } = await notificationService.getMyNotifications({
-                page: 1,
-                limit: 100,
-                unreadOnly,
-            });
-            setNotifications(data);
-        } catch (fetchError) {
-            const message = fetchError instanceof Error ? fetchError.message : "Không tải được thông báo.";
-            setError(message);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const fetchNotifications = useCallback(
+        async (p?: number) => {
+            setLoading(true);
+            setError(null);
+            try {
+                const currentPage = p || page;
+                const result = await notificationService.getMyNotifications({
+                    page: currentPage,
+                    limit,
+                    unreadOnly,
+                });
+                setNotifications(result.notifications);
+                updatePagination(result.meta);
+            } catch (fetchError) {
+                const message = fetchError instanceof Error ? fetchError.message : "Không tải được thông báo.";
+                setError(message);
+            } finally {
+                setLoading(false);
+            }
+        },
+        [page, limit, unreadOnly, updatePagination]
+    );
+
+    useEffect(() => {
+        void fetchNotifications(1);
+        goToPage(1);
+    }, [unreadOnly]);
 
     useEffect(() => {
         void fetchNotifications();
-    }, [unreadOnly]);
+    }, [page]);
 
     const handleMarkAsRead = async (id: string) => {
         setActionLoading(true);
@@ -82,7 +96,10 @@ export default function NotificationsPage() {
                     <div className="inline-flex items-center gap-2">
                         <button
                             type="button"
-                            onClick={() => setUnreadOnly((prev) => !prev)}
+                            onClick={() => {
+                                setUnreadOnly((prev) => !prev);
+                                goToPage(1);
+                            }}
                             className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs text-indigo-200 hover:bg-indigo-500/20"
                         >
                             {unreadOnly ? "Hiện tất cả" : "Chỉ chưa đọc"}
@@ -109,37 +126,51 @@ export default function NotificationsPage() {
                     ) : notifications.length === 0 ? (
                         <p className="text-sm text-slate-400">Không có thông báo.</p>
                     ) : (
-                        <div className="space-y-3">
-                            {notifications.map((item) => (
-                                <article
-                                    key={item._id}
-                                    className={`rounded-xl border p-4 ${item.isRead ? "border-white/10 bg-slate-800/40" : "border-blue-500/30 bg-blue-500/10"}`}
-                                >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                                                <Bell className="h-4 w-4 text-blue-300" />
-                                                {item.title}
-                                            </h3>
-                                            <p className="mt-1 text-sm text-slate-300">{item.message}</p>
-                                            <p className="mt-2 text-xs text-slate-400">
-                                                {new Date(item.createdAt).toLocaleString("vi-VN")} · {item.type}
-                                            </p>
-                                        </div>
+                        <div className="space-y-4">
+                            <div className="space-y-3">
+                                {notifications.map((item) => (
+                                    <article
+                                        key={item._id}
+                                        className={`rounded-xl border p-4 ${item.isRead ? "border-white/10 bg-slate-800/40" : "border-blue-500/30 bg-blue-500/10"}`}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                                                    <Bell className="h-4 w-4 text-blue-300" />
+                                                    {item.title}
+                                                </h3>
+                                                <p className="mt-1 text-sm text-slate-300">{item.message}</p>
+                                                <p className="mt-2 text-xs text-slate-400">
+                                                    {new Date(item.createdAt).toLocaleString("vi-VN")} · {item.type}
+                                                </p>
+                                            </div>
 
-                                        {!item.isRead && (
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleMarkAsRead(item._id)}
-                                                disabled={actionLoading}
-                                                className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
-                                            >
-                                                Đã đọc
-                                            </button>
-                                        )}
-                                    </div>
-                                </article>
-                            ))}
+                                            {!item.isRead && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleMarkAsRead(item._id)}
+                                                    disabled={actionLoading}
+                                                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
+                                                >
+                                                    Đã đọc
+                                                </button>
+                                            )}
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+
+                            {/* Pagination */}
+                            <div className="flex justify-center pt-4 border-t border-white/10">
+                                <Pagination
+                                    page={page}
+                                    pages={pagination.pages}
+                                    total={pagination.total}
+                                    limit={limit}
+                                    onPageChange={goToPage}
+                                    showInfo={false}
+                                />
+                            </div>
                         </div>
                     )}
                 </section>

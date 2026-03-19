@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import BookDetailView from "@/app/dashboard/books/page_book_detail";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { bookService } from "@/services/bookService";
 import { reservationService } from "@/services/reservationService";
 import { useAuthStore } from "@/stores/authStore";
@@ -129,16 +131,24 @@ export default function BookDetailPage() {
   };
 
   return (
-    <BookDetailView
-      book={book}
-      recommendations={recommendations}
-      recommendationType={recommendationType}
-      loading={loading}
-      error={error}
-      onReserve={handleReserve}
-      reserveLoading={isReserving}
-      reserveMessage={reserveMessage}
-      reserveError={reserveError}
-    />
+    <div className="min-h-screen overflow-x-hidden bg-[#f6f6f8] text-[#111318] transition-colors duration-200 dark:bg-[#101622] dark:text-white">
+      <div className="mx-auto w-full max-w-[1200px]">
+        <Header searchText="" onSearchChange={() => {}} onSearch={() => {}} showSearch={true} />
+        
+        <BookDetailView
+          book={book}
+          recommendations={recommendations}
+          recommendationType={recommendationType}
+          loading={loading}
+          error={error}
+          onReserve={handleReserve}
+          reserveLoading={isReserving}
+          reserveMessage={reserveMessage}
+          reserveError={reserveError}
+        />
+        
+        <Footer />
+      </div>
+    </div>
   );
 }

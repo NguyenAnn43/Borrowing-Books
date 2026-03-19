@@ -211,6 +211,58 @@ export default function BookDetailView({
           </div>
         )}
       </section>
+
+      <section className="mt-12 bg-white rounded-2xl p-8 shadow-sm dark:bg-[#1a2130] dark:border-gray-800 border border-gray-100">
+        <h2 className="text-2xl font-extrabold leading-tight tracking-[-0.015em] text-[#111318] dark:text-white mb-6">
+          Explore Categories
+        </h2>
+        
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+          <div className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 bg-gradient-to-br from-[#2b6cee] to-[#1e4cba] hover:shadow-xl">
+            <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
+              <span className="material-symbols-outlined text-9xl text-white">auto_stories</span>
+            </div>
+            <div className="z-10 space-y-1">
+              <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">auto_stories</span>
+              <p className="text-lg font-bold text-white">Công Nghệ</p>
+              <p className="text-sm text-white/80">100+ titles</p>
+            </div>
+          </div>
+          
+          <div className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 bg-gradient-to-br from-[#0f172a] to-[#1a2542] hover:shadow-xl">
+            <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
+              <span className="material-symbols-outlined text-9xl text-white">terminal</span>
+            </div>
+            <div className="z-10 space-y-1">
+              <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">terminal</span>
+              <p className="text-lg font-bold text-white">Khoa Học</p>
+              <p className="text-sm text-white/80">80+ titles</p>
+            </div>
+          </div>
+          
+          <div className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 bg-gradient-to-br from-[#065f46] to-[#064e3b] hover:shadow-xl">
+            <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
+              <span className="material-symbols-outlined text-9xl text-white">biotech</span>
+            </div>
+            <div className="z-10 space-y-1">
+              <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">biotech</span>
+              <p className="text-lg font-bold text-white">Văn Học</p>
+              <p className="text-sm text-white/80">120+ titles</p>
+            </div>
+          </div>
+          
+          <div className="group relative flex h-40 flex-col justify-end overflow-hidden rounded-xl p-5 transition-all duration-300 bg-gradient-to-br from-[#9d174d] to-[#831843] hover:shadow-xl">
+            <div className="absolute -right-4 -top-4 opacity-10 transition-all duration-300 group-hover:opacity-20">
+              <span className="material-symbols-outlined text-9xl text-white">palette</span>
+            </div>
+            <div className="z-10 space-y-1">
+              <span className="material-symbols-outlined mb-2 block text-3xl text-white transition-transform duration-300 group-hover:scale-110">palette</span>
+              <p className="text-lg font-bold text-white">Nghệ Thuật</p>
+              <p className="text-sm text-white/80">60+ titles</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

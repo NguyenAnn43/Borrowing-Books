@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
 import { borrowingService } from "@/services/borrowingService";
+import { Pagination } from "@/components/ui/Pagination";
+import { Input } from "@/components/ui/Input";
+import { usePagination, useSearch } from "@/hooks";
 import type { IBorrowing } from "@/types";
 
 const RENEWAL_DAYS = 7;
@@ -48,39 +51,60 @@ export default function BorrowingsPage() {
     const [success, setSuccess] = useState<string | null>(null);
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
+    const { searchTerm, setSearchTerm, debouncedTerm, resetSearch } = useSearch({ debounceMs: 300 });
+    const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 10 });
+
     const canViewAll = user?.role === "admin" || user?.role === "librarian";
     const canManage = user?.role === "librarian";
 
-    const fetchBorrowings = useCallback(async (status?: string | null) => {
-        setLoading(true);
-        setError(null);
-        try {
-            if (canViewAll) {
-                const { borrowings: all } = await borrowingService.getBorrowings({ 
-                    page: 1, 
-                    limit: 100,
-                    status: (status as "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | undefined) || undefined,
-                });
-                setBorrowings(all);
-            } else {
-                const { borrowings: mine } = await borrowingService.getMyBorrowings({ 
-                    page: 1, 
-                    limit: 100,
-                    status: status || undefined,
-                });
-                setBorrowings(mine);
+    const fetchBorrowings = useCallback(
+        async (p?: number, l?: number, searchQ?: string) => {
+            setLoading(true);
+            setError(null);
+            try {
+                const currentPage = p || page;
+                const currentLimit = l || limit;
+                const query = searchQ || debouncedTerm;
+
+                if (canViewAll) {
+                    const result = await borrowingService.getBorrowings({
+                        page: currentPage,
+                        limit: currentLimit,
+                        q: query || undefined,
+                        status: (selectedStatus as "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | undefined) || undefined,
+                    });
+                    setBorrowings(result.borrowings);
+                    updatePagination(result.pagination);
+                } else {
+                    const result = await borrowingService.getMyBorrowings({
+                        page: currentPage,
+                        limit: currentLimit,
+                        status: selectedStatus || undefined,
+                    });
+                    setBorrowings(result.borrowings);
+                    updatePagination(result.pagination);
+                }
+            } catch (fetchError) {
+                const message = fetchError instanceof Error ? fetchError.message : "Không tải được danh sách mượn.";
+                setError(message);
+            } finally {
+                setLoading(false);
             }
-        } catch (fetchError) {
-            const message = fetchError instanceof Error ? fetchError.message : "Không tải được danh sách mượn.";
-            setError(message);
-        } finally {
-            setLoading(false);
-        }
-    }, [canViewAll]);
+        },
+        [page, limit, debouncedTerm, canViewAll, selectedStatus, updatePagination]
+    );
 
     useEffect(() => {
-        void fetchBorrowings(selectedStatus);
-    }, [selectedStatus, fetchBorrowings]);
+        void fetchBorrowings(1, limit, debouncedTerm);
+        // Reset to page 1 when search changes
+        if (debouncedTerm) {
+            goToPage(1);
+        }
+    }, [debouncedTerm, limit, selectedStatus]);
+
+    useEffect(() => {
+        void fetchBorrowings();
+    }, [page]);
 
     const runAction = async (id: string, action: () => Promise<unknown>, successMessage: string) => {
         setActionLoading(id);
@@ -89,7 +113,7 @@ export default function BorrowingsPage() {
         try {
             await action();
             setSuccess(successMessage);
-            await fetchBorrowings(selectedStatus);
+            await fetchBorrowings();
         } catch (actionError) {
             const message = actionError instanceof Error ? actionError.message : "Không thể thực hiện thao tác.";
             setError(message);
@@ -116,11 +140,38 @@ export default function BorrowingsPage() {
                 {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
                 {success && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}
 
+                {/* Search bar for admin/librarian */}
+                {canViewAll && (
+                    <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4">
+                        <div className="flex items-center gap-2">
+                            <Search className="h-5 w-5 text-indigo-400" />
+                            <Input
+                                type="text"
+                                placeholder="Tìm kiếm theo tên sách hoặc người mượn..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="flex-1"
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={resetSearch}
+                                    className="p-2 text-slate-400 hover:text-slate-200"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="rounded-2xl border-2 border-indigo-500/30 bg-indigo-500/5 p-4">
                     <p className="text-xs font-semibold text-indigo-300 mb-3 uppercase">Lọc theo trạng thái</p>
                     <div className="flex flex-wrap gap-2">
                         <button
-                            onClick={() => setSelectedStatus(null)}
+                            onClick={() => {
+                                setSelectedStatus(null);
+                                goToPage(1);
+                            }}
                             className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${
                                 selectedStatus === null
                                     ? "bg-indigo-500/40 border-2 border-indigo-400 text-indigo-100 shadow-lg shadow-indigo-500/20"
@@ -132,7 +183,10 @@ export default function BorrowingsPage() {
                         {BORROWING_STATUS.map((status) => (
                             <button
                                 key={status.value}
-                                onClick={() => setSelectedStatus(status.value)}
+                                onClick={() => {
+                                    setSelectedStatus(status.value);
+                                    goToPage(1);
+                                }}
                                 className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${
                                     selectedStatus === status.value
                                         ? `${getStatusColor(status.value)} shadow-lg opacity-100`
@@ -153,51 +207,52 @@ export default function BorrowingsPage() {
                     ) : borrowings.length === 0 ? (
                         <p className="text-slate-400 text-sm">Chưa có dữ liệu.</p>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[980px] text-sm">
-                                <thead>
-                                    <tr className="text-left text-slate-400 border-b border-white/10">
-                                        <th className="py-2 pr-3">Sách</th>
-                                        <th className="py-2 pr-3">Người mượn</th>
-                                        <th className="py-2 pr-3">Thư viện</th>
-                                        <th className="py-2 pr-3">Trạng thái</th>
-                                        <th className="py-2 pr-3">Hạn trả</th>
-                                        <th className="py-2 pr-3">Phạt</th>
-                                        <th className="py-2 text-right">Hành động</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {borrowings.map((item) => {
-                                        const renewalCount = item.renewalCount ?? 0;
-                                        const maxRenewals = item.maxRenewals ?? DEFAULT_MAX_RENEWALS;
-                                        const reachedRenewalLimit = renewalCount >= maxRenewals;
+                        <div className="space-y-4">
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[980px] text-sm">
+                                    <thead>
+                                        <tr className="text-left text-slate-400 border-b border-white/10">
+                                            <th className="py-2 pr-3">Sách</th>
+                                            <th className="py-2 pr-3">Người mượn</th>
+                                            <th className="py-2 pr-3">Thư viện</th>
+                                            <th className="py-2 pr-3">Trạng thái</th>
+                                            <th className="py-2 pr-3">Hạn trả</th>
+                                            <th className="py-2 pr-3">Phạt</th>
+                                            <th className="py-2 text-right">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {borrowings.map((item) => {
+                                            const renewalCount = item.renewalCount ?? 0;
+                                            const maxRenewals = item.maxRenewals ?? DEFAULT_MAX_RENEWALS;
+                                            const reachedRenewalLimit = renewalCount >= maxRenewals;
 
-                                        return (
-                                        <tr key={item._id} className="border-b border-white/5 text-slate-200 hover:bg-slate-800/30 transition-colors">
-                                            <td className="py-2 pr-3 font-medium">{item.bookId?.title || "-"}</td>
-                                            <td className="py-2 pr-3">{item.userId?.fullName || "-"}</td>
-                                            <td className="py-2 pr-3">{item.libraryId?.name || "-"}</td>
-                                            <td className="py-2 pr-3">
-                                                <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${getStatusColor(item.status)}`}>
-                                                    {getStatusLabel(item.status)}
-                                                </span>
-                                            </td>
-                                            <td className="py-2 pr-3">{new Date(item.dueDate).toLocaleDateString("vi-VN")}</td>
-                                            <td className="py-2 pr-3">{item.fineAmount?.toLocaleString("vi-VN") || 0}</td>
-                                            <td className="py-2 text-right">
-                                                <div className="inline-flex flex-wrap items-center justify-end gap-2">
-                                                    {canManage && item.status === "pending" && (
-                                                        <button
-                                                            type="button"
-                                                            disabled={actionLoading === item._id}
-                                                            onClick={() => void runAction(item._id, () => borrowingService.confirmPickup(item._id), "Xác nhận nhận sách thành công.")}
-                                                            className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-200 hover:bg-blue-500/20 disabled:opacity-60"
-                                                        >
-                                                            Xác nhận
-                                                        </button>
-                                                    )}
+                                            return (
+                                            <tr key={item._id} className="border-b border-white/5 text-slate-200 hover:bg-slate-800/30 transition-colors">
+                                                <td className="py-2 pr-3 font-medium">{item.bookId?.title || "-"}</td>
+                                                <td className="py-2 pr-3">{item.userId?.fullName || "-"}</td>
+                                                <td className="py-2 pr-3">{item.libraryId?.name || "-"}</td>
+                                                <td className="py-2 pr-3">
+                                                    <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${getStatusColor(item.status)}`}>
+                                                        {getStatusLabel(item.status)}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 pr-3">{new Date(item.dueDate).toLocaleDateString("vi-VN")}</td>
+                                                <td className="py-2 pr-3">{item.fineAmount?.toLocaleString("vi-VN") || 0}</td>
+                                                <td className="py-2 text-right">
+                                                    <div className="inline-flex flex-wrap items-center justify-end gap-2">
+                                                        {canManage && item.status === "pending" && (
+                                                            <button
+                                                                type="button"
+                                                                disabled={actionLoading === item._id}
+                                                                onClick={() => void runAction(item._id, () => borrowingService.confirmPickup(item._id), "Xác nhận nhận sách thành công.")}
+                                                                className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-200 hover:bg-blue-500/20 disabled:opacity-60"
+                                                            >
+                                                                Xác nhận
+                                                            </button>
+                                                        )}
 
-                                                    {canManage && (item.status === "borrowed" || item.status === "overdue") && (
+                                                        {canManage && (item.status === "borrowed" || item.status === "overdue") && (
                                                         <button
                                                             type="button"
                                                             disabled={actionLoading === item._id}
@@ -254,8 +309,21 @@ export default function BorrowingsPage() {
                                         </tr>
                                         );
                                     })}
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            {/* Pagination */}
+                            <div className="flex justify-center pt-4 border-t border-white/10">
+                                <Pagination
+                                    page={page}
+                                    pages={pagination.pages}
+                                    total={pagination.total}
+                                    limit={limit}
+                                    onPageChange={goToPage}
+                                    showInfo={false}
+                                />
+                            </div>
                         </div>
                     )}
                 </section>
