@@ -92,18 +92,37 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
 };
 
 /**
- * Get user's own borrowings
+ * Get user's own borrowings with optional search
  */
 export const getMyBorrowings = async (
     userId: string,
-    params: { page?: number; limit?: number; status?: string } = {}
+    params: { page?: number; limit?: number; status?: string; q?: string } = {}
 ): Promise<GetBorrowingsResult> => {
-    const { page = 1, limit = 10, status } = params;
+    const { q, page = 1, limit = 10, status } = params;
     const query: Record<string, unknown> = { userId };
     if (status) query.status = status;
 
+    // Add search by book title
+    if (q) {
+        const searchQuery = { $regex: q, $options: 'i' };
+        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
+        const bookIds = matchingBooks.map((b) => b._id);
+        if (bookIds.length > 0) {
+            query.bookId = { $in: bookIds };
+        } else {
+            // If no matches, return empty result
+            return { borrowings: [], pagination: formatPagination(page, limit, 0) };
+        }
+    }
+
     const [borrowings, total] = await Promise.all([
-        Borrowing.find(query).skip((page - 1) * limit).limit(limit).sort({ createdAt: -1 }) as Promise<IBorrowing[]>,
+        Borrowing.find(query)
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .sort({ createdAt: -1 })
+            .populate('bookId', 'title author')
+            .populate('userId', 'name email')
+            .populate('libraryId', 'name') as Promise<IBorrowing[]>,
         Borrowing.countDocuments(query),
     ]);
 

@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, ShoppingCart, Home } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useCartStore } from "@/stores/cartStore";
+import { notificationService } from "@/services/notificationService";
 import { RouteGuard } from "@/components/RouteGuard";
 
 const roleLabel: Record<string, string> = {
@@ -24,6 +26,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const pathname = usePathname();
     const { user, logout } = useAuthStore();
     const cartItems = useCartStore((state) => state.items);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // Fetch unread notification count on mount
+    useEffect(() => {
+        const fetchUnreadCount = async () => {
+            try {
+                const result = await notificationService.getMyNotifications({
+                    unreadOnly: true,
+                    limit: 1,
+                });
+                setUnreadCount(result.meta.unreadCount ?? 0);
+            } catch (error) {
+                console.error("Failed to fetch unread notification count:", error);
+            }
+        };
+
+        if (user?._id) {
+            fetchUnreadCount();
+        }
+    }, [user?._id]);
 
     const handleLogout = async () => {
         await logout();
@@ -132,7 +154,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                             {cartItems.length}
                                         </span>
                                     )}
-                                    {active && item.href !== "/dashboard/cart" && <ChevronRight className="h-3 w-3 ml-auto text-blue-400" />}
+                                    {item.href === "/dashboard/notifications" && unreadCount > 0 && (
+                                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                                            {unreadCount}
+                                        </span>
+                                    )}
+                                    {active && item.href !== "/dashboard/cart" && item.href !== "/dashboard/notifications" && <ChevronRight className="h-3 w-3 ml-auto text-blue-400" />}
                                 </Link>
                             );
                         })}

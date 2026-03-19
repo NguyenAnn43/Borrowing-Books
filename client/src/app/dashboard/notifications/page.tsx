@@ -16,7 +16,7 @@ export default function NotificationsPage() {
     const [success, setSuccess] = useState<string | null>(null);
     const [unreadOnly, setUnreadOnly] = useState(false);
 
-    const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 10 });
+    const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 6 });
 
     const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications]);
 
