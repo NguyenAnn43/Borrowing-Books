@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Trash2, BookOpen, Loader2, ArrowRight } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { borrowingService } from "@/services/borrowingService";
@@ -20,14 +19,14 @@ const getApiErrorCode = (err: unknown): string | undefined => {
 const getApiErrorMessage = (err: unknown): string | undefined => {
     if (!err || typeof err !== "object") return undefined;
 
-    const asAny = err as {
+    const errorObj = err as {
         message?: string;
         response?: { data?: { error?: { message?: string }; message?: string } };
     };
 
-    return asAny.response?.data?.error?.message
-        || asAny.response?.data?.message
-        || asAny.message;
+    return errorObj.response?.data?.error?.message
+        || errorObj.response?.data?.message
+        || errorObj.message;
 };
 
 export default function CartPage() {

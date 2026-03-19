@@ -14,18 +14,18 @@ export function useSearch(options: UseSearchOptions = {}) {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedTerm, setDebouncedTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
 
   // Debounce search term
   useEffect(() => {
-    setIsSearching(true);
     const timer = setTimeout(() => {
       setDebouncedTerm(searchTerm);
-      setIsSearching(false);
     }, debounceMs);
 
     return () => clearTimeout(timer);
   }, [searchTerm, debounceMs]);
+
+  // Derive isSearching from whether searchTerm differs from debouncedTerm
+  const isSearching = searchTerm !== debouncedTerm;
 
   // Reset search
   const resetSearch = useCallback(() => {
