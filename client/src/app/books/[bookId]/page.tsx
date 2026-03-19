@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { bookService } from "@/services/bookService";
 import { reservationService } from "@/services/reservationService";
+import { wishlistService } from "@/services/wishlistService";
 import { useAuthStore } from "@/stores/authStore";
 import type { IBook } from "@/types";
 
@@ -24,6 +25,11 @@ export default function BookDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(0);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [wishlistMessage, setWishlistMessage] = useState("");
+
   useEffect(() => {
     const fetchBookDetail = async () => {
       if (!bookId) {
@@ -38,6 +44,8 @@ export default function BookDetailPage() {
       try {
         const selectedBook = await bookService.getBookById(bookId);
         setBook(selectedBook);
+        setIsWishlisted(Boolean(selectedBook.isWishlisted));
+        setWishlistCount(selectedBook.wishlistCount || 0);
         setReserveMessage("");
         setReserveError("");
 
@@ -130,8 +138,40 @@ export default function BookDetailPage() {
     }
   };
 
+  const handleWishlistToggle = async () => {
+    const isSignedIn = user && user.role !== "guest";
+    if (!isSignedIn) {
+      setWishlistMessage("Bạn cần đăng nhập để thêm sách vào wishlist.");
+      return;
+    }
+
+    setWishlistLoading(true);
+    try {
+      if (isWishlisted) {
+        const result = await wishlistService.removeFromWishlist(book!._id);
+        setIsWishlisted(result.isWishlisted);
+        setWishlistCount(result.wishlistCount);
+      } else {
+        const result = await wishlistService.addToWishlist(book!._id);
+        setIsWishlisted(result.isWishlisted);
+        setWishlistCount(result.wishlistCount);
+      }
+    } catch {
+      setWishlistMessage("Không thể cập nhật wishlist. Vui lòng thử lại.");
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f6f8] text-[#111318] transition-colors duration-200 dark:bg-[#101622] dark:text-white">
+      {wishlistMessage && (
+        <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+          <div className="rounded-xl border border-blue-300 bg-blue-50/95 px-4 py-3 text-sm font-medium text-blue-700 shadow-xl backdrop-blur dark:border-blue-700/50 dark:bg-blue-900/80 dark:text-blue-200">
+            {wishlistMessage}
+          </div>
+        </div>
+      )}
       <div className="mx-auto w-full max-w-[1200px]">
         <Header searchText="" onSearchChange={() => {}} onSearch={() => {}} showSearch={true} />
         
@@ -145,6 +185,10 @@ export default function BookDetailPage() {
           reserveLoading={isReserving}
           reserveMessage={reserveMessage}
           reserveError={reserveError}
+          isWishlisted={isWishlisted}
+          wishlistCount={wishlistCount}
+          wishlistLoading={wishlistLoading}
+          onWishlistToggle={() => void handleWishlistToggle()}
         />
         
         <Footer />

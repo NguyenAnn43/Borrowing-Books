@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { X } from "lucide-react";
 import { ShoppingCart } from "lucide-react";
 import type { IBook } from "@/types";
 import { useAuthStore } from "@/stores/authStore";
@@ -19,6 +21,10 @@ interface BookDetailViewProps {
   reserveLoading?: boolean;
   reserveMessage?: string;
   reserveError?: string;
+  isWishlisted?: boolean;
+  wishlistCount?: number;
+  wishlistLoading?: boolean;
+  onWishlistToggle?: () => void;
 }
 
 function BookCard({ book }: { book: IBook }) {
@@ -48,13 +54,31 @@ export default function BookDetailView({
   reserveLoading = false,
   reserveMessage = "",
   reserveError = "",
+  isWishlisted = false,
+  wishlistCount = 0,
+  wishlistLoading = false,
+  onWishlistToggle,
 }: BookDetailViewProps) {
+  const router = useRouter();
+
+  const handleClose = () => {
+    router.back();
+  };
+
   const { user } = useAuthStore();
   const cartStore = useCartStore();
 
   if (loading) {
     return (
-      <main className="mx-auto w-full max-w-[1200px] px-6 py-10">
+      <main className="relative mx-auto w-full max-w-[1200px] px-6 py-10">
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Đóng chi tiết sách"
+          className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-[#1a2130] dark:text-gray-300 dark:hover:bg-[#222b3d] dark:hover:text-white"
+        >
+          <X className="h-5 w-5" />
+        </button>
         <div className="animate-pulse rounded-2xl bg-white p-8 dark:bg-[#1a2130]">
           <div className="h-8 w-52 rounded bg-gray-200 dark:bg-gray-700" />
           <div className="mt-4 h-4 w-72 rounded bg-gray-100 dark:bg-gray-800" />
@@ -66,7 +90,15 @@ export default function BookDetailView({
 
   if (error || !book) {
     return (
-      <main className="mx-auto w-full max-w-[1200px] px-6 py-10">
+      <main className="relative mx-auto w-full max-w-[1200px] px-6 py-10">
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Đóng chi tiết sách"
+          className="absolute right-6 top-6 inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-[#1a2130] dark:text-gray-300 dark:hover:bg-[#222b3d] dark:hover:text-white"
+        >
+          <X className="h-5 w-5" />
+        </button>
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700 dark:border-red-500/30 dark:bg-red-900/20 dark:text-red-300">
           {error || "Không tìm thấy thông tin sách."}
         </div>
@@ -78,7 +110,15 @@ export default function BookDetailView({
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1200px] px-6 py-8">
+    <main className="relative mx-auto w-full max-w-[1200px] px-6 py-8">
+      <button
+        type="button"
+        onClick={handleClose}
+        aria-label="Đóng chi tiết sách"
+        className="absolute right-6 top-6 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:bg-[#1a2130] dark:text-gray-300 dark:hover:bg-[#222b3d] dark:hover:text-white"
+      >
+        <X className="h-5 w-5" />
+      </button>
       <nav className="mb-6 flex flex-wrap items-center gap-2 text-sm">
         <Link href="/" className="font-medium text-[#616f89] transition-colors hover:text-[#2b6cee]">
           Home
@@ -172,6 +212,29 @@ export default function BookDetailView({
             >
               {reserveLoading ? "Đang đặt trước..." : "Đặt trước"}
             </button>
+
+            <button
+              type="button"
+              onClick={onWishlistToggle}
+              disabled={wishlistLoading}
+              aria-label={isWishlisted ? "Bỏ yêu thích" : "Thêm yêu thích"}
+              className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition-all disabled:opacity-60 ${
+                isWishlisted
+                  ? "border-rose-300 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-700/50 dark:bg-rose-900/20 dark:text-rose-300"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-rose-300 hover:text-rose-600 dark:border-gray-700 dark:bg-transparent dark:text-gray-300"
+              }`}
+            >
+              <span className="text-base leading-none">
+                {wishlistLoading ? "..." : isWishlisted ? "♥" : "♡"}
+              </span>
+              <span>{isWishlisted ? "Đã yêu thích" : "Yêu thích"}</span>
+              {wishlistCount > 0 && (
+                <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-xs font-bold text-rose-600 dark:bg-rose-900/30 dark:text-rose-300">
+                  {wishlistCount}
+                </span>
+              )}
+            </button>
+
             {book.availableCopies > 0 && (
               <span className="text-xs text-amber-600 dark:text-amber-300">
                 Sách đang có sẵn, hệ thống chỉ cho đặt trước khi đã hết sách.
