@@ -114,8 +114,10 @@ bookSchema.pre('findOneAndUpdate', function (next) {
     const update = this.getUpdate() as
         | {
             isbn?: string | null;
+            isbnNormalized?: string | null;
             $set?: {
                 isbn?: string | null;
+                isbnNormalized?: string | null;
             };
           }
         | undefined;
