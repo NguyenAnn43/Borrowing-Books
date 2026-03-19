@@ -25,13 +25,26 @@ const toId = (field: unknown): string => {
 
 /**
  * Get all reservations — librarian/admin
+ * Librarians can only see reservations for their own library
  */
-export const getReservations = async (params: GetReservationsQuery): Promise<GetReservationsResult> => {
+export const getReservations = async (params: GetReservationsQuery, requestingUser: IUser): Promise<GetReservationsResult> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === 'librarian' && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
     const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
-    if (libraryId) query.libraryId = libraryId;
     if (userId) query.userId = userId;
+
+    // Librarians can only view reservations for their own library
+    if (requestingUser.role === 'librarian' && requestingUser.libraryId) {
+        query.libraryId = requestingUser.libraryId;
+    } else if (libraryId && requestingUser.role === 'admin') {
+        // Only admins can filter by different libraries
+        query.libraryId = libraryId;
+    }
 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
@@ -249,4 +262,70 @@ export const expireReservations = async (): Promise<number> => {
         { status: RESERVATION_STATUS.EXPIRED }
     );
     return result.modifiedCount;
+};
+
+/**
+ * Auto-fulfill the earliest pending reservation for a book.
+ * Called when a book is returned to automatically process the next reservation.
+ * Creates a PENDING borrowing record (staff must confirm pickup), marks reservation as COMPLETED, and sends notification.
+ *
+ * @param bookId - ID of the book that was returned
+ * @returns Reservation that was fulfilled, or null if no pending reservations
+ */
+export const autoFulfillPendingReservation = async (bookId: string | Types.ObjectId): Promise<IReservation | null> => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Find the earliest pending reservation for this book
+        const reservation = await Reservation.findOne({
+            bookId: new Types.ObjectId(bookId),
+            status: RESERVATION_STATUS.PENDING,
+        }).sort({ reservationDate: 1 }).session(session) as IReservation | null;
+
+        if (!reservation) {
+            await session.abortTransaction();
+            return null;
+        }
+
+        // Create borrowing record with PENDING status (librarian must confirm pickup)
+        // Stock will be decremented when librarian confirms pickup
+        const now = new Date();
+        const dueDate = generateDueDate(now, BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
+        const borrowingDocs = await Borrowing.create([{
+            userId: reservation.userId,
+            bookId: reservation.bookId,
+            libraryId: reservation.libraryId,
+            borrowDate: now,
+            dueDate,
+            status: BORROWING_STATUS.PENDING,
+        }], { session }) as IBorrowing[];
+        const borrowing = borrowingDocs[0];
+
+        if (!borrowing) {
+            throw new AppError('Failed to create borrowing', 500, 'BORROWING_CREATE_FAILED');
+        }
+
+        // Update reservation to COMPLETED
+        reservation.status = RESERVATION_STATUS.COMPLETED;
+        reservation.borrowingId = borrowing._id;
+        await reservation.save({ session });
+
+        await session.commitTransaction();
+
+        // Send notification to the user
+        await notificationService.create({
+            userId: toId(reservation.userId),
+            title: 'Reserved Book Available - Await Confirmation',
+            message: `The book you reserved is now available for pickup. Please visit the library for confirmation and collection. Due date will be ${dueDate.toLocaleDateString('vi-VN')}.`,
+            type: NOTIFICATION_TYPE.RESERVATION,
+        });
+
+        return reservation;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
+    }
 };

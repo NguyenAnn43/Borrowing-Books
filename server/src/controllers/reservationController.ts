@@ -5,7 +5,7 @@ import { AuthRequest } from '../types';
 import { GetReservationsQuery } from '../validators/reservationSchema';
 
 export const getReservations = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const result = await reservationService.getReservations(req.query as unknown as GetReservationsQuery);
+    const result = await reservationService.getReservations(req.query as unknown as GetReservationsQuery, req.user!);
     res.json({ success: true, data: result.reservations, meta: result.pagination });
 });
 
