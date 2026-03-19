@@ -554,6 +554,13 @@ export const markFineAsPaidByBorrowingId = async (id: string): Promise<IBorrowin
     const borrowing = await Borrowing.findById(id) as IBorrowing | null;
     if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
+    // Librarians can only manage borrowings for their own library
+    if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+        if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+            throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
+        }
+    }
+
     if (!borrowing.isFined) {
         throw new AppError('This borrowing has no outstanding fine', 400, 'NO_FINE');
     }
