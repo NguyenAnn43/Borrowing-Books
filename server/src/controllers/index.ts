@@ -6,3 +6,4 @@ export * as userController from './userController';
 export * as reservationController from './reservationController';
 export * as notificationController from './notificationController';
 export * as wishlistController from './wishlistController';
+export * as reviewController from './reviewController';

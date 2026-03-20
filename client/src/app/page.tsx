@@ -407,6 +407,12 @@ onChange={(event) => setSearchText(event.target.value)}
                               : "1 thư viện"}
                           </span>
                         </div>
+
+                        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                          <span className="rounded-full bg-yellow-100 px-2 py-1 font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">
+                            ⭐ {book.averageRating ? `${book.averageRating}/5` : "N/A"}
+                          </span>
+                        </div>
                       </div>
                     </Link>
                   ))}

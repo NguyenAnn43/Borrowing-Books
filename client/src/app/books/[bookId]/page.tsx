@@ -6,10 +6,12 @@ import BookDetailView from "@/app/dashboard/books/page_book_detail";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { bookService } from "@/services/bookService";
+import { borrowingService } from "@/services/borrowingService";
+import { reviewService } from "@/services/reviewService";
 import { reservationService } from "@/services/reservationService";
 import { wishlistService } from "@/services/wishlistService";
 import { useAuthStore } from "@/stores/authStore";
-import type { IBook } from "@/types";
+import type { IBook, IBookReview } from "@/types";
 
 export default function BookDetailPage() {
   const { user, isAuthenticated } = useAuthStore();
@@ -24,11 +26,61 @@ export default function BookDetailPage() {
   const [reserveError, setReserveError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reviews, setReviews] = useState<IBookReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState("");
+  const [canReview, setCanReview] = useState(false);
+  const [canReviewLoading, setCanReviewLoading] = useState(false);
+  const [myBookReview, setMyBookReview] = useState<IBookReview | null>(null);
 
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistCount, setWishlistCount] = useState(0);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistMessage, setWishlistMessage] = useState("");
+
+  const loadReviews = async (targetBookId: string) => {
+    setReviewsLoading(true);
+    setReviewsError("");
+    try {
+      const reviewsResult = await reviewService.getBookReviews(targetBookId, { page: 1, limit: 20 });
+      setReviews(reviewsResult.reviews);
+
+      if (user?._id) {
+        const mine = reviewsResult.reviews.find((item) => item.userId?._id === user._id) || null;
+        setMyBookReview(mine);
+      } else {
+        setMyBookReview(null);
+      }
+    } catch {
+      setReviews([]);
+      setMyBookReview(null);
+      setReviewsError("Không thể tải review của độc giả.");
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const loadCanReview = async (targetBookId: string) => {
+    if (!isAuthenticated || !user || user.role !== "user") {
+      setCanReview(false);
+      setCanReviewLoading(false);
+      return;
+    }
+
+    setCanReviewLoading(true);
+    try {
+      const myBorrowings = await borrowingService.getMyBorrowings({ page: 1, limit: 200 });
+      const eligibleStatuses = new Set(["borrowed", "returned", "overdue"]);
+      const hasBorrowedThisBook = myBorrowings.borrowings.some(
+        (item) => item.bookId?._id === targetBookId && eligibleStatuses.has(item.status)
+      );
+      setCanReview(hasBorrowedThisBook);
+    } catch {
+      setCanReview(false);
+    } finally {
+      setCanReviewLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchBookDetail = async () => {
@@ -51,6 +103,11 @@ export default function BookDetailPage() {
 
         const alternatives = await bookService.getBookAlternatives(bookId);
 
+        await Promise.all([
+          loadReviews(bookId),
+          loadCanReview(bookId),
+        ]);
+
         if (alternatives.alternatives.length > 0) {
           setRecommendationType("alternatives");
           setRecommendations(alternatives.alternatives.slice(0, 5));
@@ -68,6 +125,11 @@ export default function BookDetailPage() {
       } catch {
         setError("Không thể tải chi tiết sách. Vui lòng thử lại.");
         setBook(null);
+        setReviews([]);
+        setCanReview(false);
+        setCanReviewLoading(false);
+        setMyBookReview(null);
+        setReviewsError("Không thể tải review của độc giả.");
         setRecommendationType("related");
         setRecommendations([]);
       } finally {
@@ -189,6 +251,13 @@ export default function BookDetailPage() {
           wishlistCount={wishlistCount}
           wishlistLoading={wishlistLoading}
           onWishlistToggle={() => void handleWishlistToggle()}
+          reviews={reviews}
+          reviewsLoading={reviewsLoading}
+          reviewsError={reviewsError}
+          canReview={canReview}
+          canReviewLoading={canReviewLoading}
+          myBookReview={myBookReview}
+          onReviewChanged={() => loadReviews(bookId)}
         />
         
         <Footer />

@@ -7,6 +7,7 @@ import { RouteGuard } from "@/components/RouteGuard";
 const stats = [
     { label: "Yêu cầu mượn chờ duyệt", value: "—", icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
     { label: "Đang cho mượn", value: "—", icon: BookCopy, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
+                            { label: "Review cần theo dõi", icon: Clock, href: "/dashboard/reviews" },
     { label: "Đã trả hôm nay", value: "—", icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
     { label: "Tổng đầu sách quản lý", value: "—", icon: BookOpen, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
 ];

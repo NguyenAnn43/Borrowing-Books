@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Search, X } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Search, Star, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
 import { borrowingService } from "@/services/borrowingService";
+import { reviewService } from "@/services/reviewService";
 import { Pagination } from "@/components/ui/Pagination";
 import { Input } from "@/components/ui/Input";
 import { usePagination, useSearch } from "@/hooks";
-import type { IBorrowing } from "@/types";
+import type { IBookReview, IBorrowing, ILibraryReview } from "@/types";
 
 const RENEWAL_DAYS = 7;
 const DEFAULT_MAX_RENEWALS = 2;
@@ -50,6 +52,26 @@ export default function BorrowingsPage() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+    const [reviewModalOpen, setReviewModalOpen] = useState(false);
+    const [reviewLoading, setReviewLoading] = useState(false);
+    const [reviewSubmitting, setReviewSubmitting] = useState(false);
+    const [reviewBookId, setReviewBookId] = useState<string | null>(null);
+    const [reviewBookTitle, setReviewBookTitle] = useState<string>("");
+    const [currentReview, setCurrentReview] = useState<IBookReview | null>(null);
+    const [reviewStars, setReviewStars] = useState<number>(5);
+    const [reviewComment, setReviewComment] = useState<string>("");
+    const [reviewImagesText, setReviewImagesText] = useState<string>("");
+    const [reviewError, setReviewError] = useState<string | null>(null);
+    const [libraryReviewModalOpen, setLibraryReviewModalOpen] = useState(false);
+    const [libraryReviewLoading, setLibraryReviewLoading] = useState(false);
+    const [libraryReviewSubmitting, setLibraryReviewSubmitting] = useState(false);
+    const [reviewLibraryId, setReviewLibraryId] = useState<string | null>(null);
+    const [reviewLibraryName, setReviewLibraryName] = useState<string>("");
+    const [currentLibraryReview, setCurrentLibraryReview] = useState<ILibraryReview | null>(null);
+    const [libraryReviewStars, setLibraryReviewStars] = useState<number>(5);
+    const [libraryReviewComment, setLibraryReviewComment] = useState<string>("");
+    const [libraryReviewImagesText, setLibraryReviewImagesText] = useState<string>("");
+    const [libraryReviewError, setLibraryReviewError] = useState<string | null>(null);
 
     const { searchTerm, setSearchTerm, debouncedTerm, resetSearch } = useSearch({ debounceMs: 300 });
     const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 10 });
@@ -119,6 +141,196 @@ export default function BorrowingsPage() {
             setError(message);
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    const openReviewModal = async (bookId: string, bookTitle: string) => {
+        if (!user?._id) return;
+
+        setReviewModalOpen(true);
+        setReviewBookId(bookId);
+        setReviewBookTitle(bookTitle);
+        setReviewError(null);
+        setCurrentReview(null);
+        setReviewStars(5);
+        setReviewComment("");
+        setReviewImagesText("");
+        setReviewLoading(true);
+
+        try {
+            const result = await reviewService.getBookReviews(bookId, { page: 1, limit: 100 });
+            const mine = result.reviews.find((review) => review.userId?._id === user._id) || null;
+
+            if (mine) {
+                setCurrentReview(mine);
+                setReviewStars(mine.stars);
+                setReviewComment(mine.comment || "");
+                setReviewImagesText(mine.images.join("\n"));
+            }
+        } catch (fetchError) {
+            const message = fetchError instanceof Error ? fetchError.message : "Không thể tải dữ liệu review.";
+            setReviewError(message);
+        } finally {
+            setReviewLoading(false);
+        }
+    };
+
+    const closeReviewModal = () => {
+        if (reviewSubmitting) return;
+        setReviewModalOpen(false);
+        setReviewBookId(null);
+        setReviewBookTitle("");
+        setCurrentReview(null);
+        setReviewError(null);
+    };
+
+    const submitReview = async () => {
+        if (!reviewBookId) return;
+
+        setReviewSubmitting(true);
+        setReviewError(null);
+
+        const images = reviewImagesText
+            .split(/\n|,/g)
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+        try {
+            if (currentReview) {
+                await reviewService.updateBookReview(currentReview._id, {
+                    stars: reviewStars,
+                    comment: reviewComment.trim() || undefined,
+                    images,
+                });
+                setSuccess("Đã cập nhật đánh giá sách.");
+            } else {
+                await reviewService.createBookReview(reviewBookId, {
+                    stars: reviewStars,
+                    comment: reviewComment.trim() || undefined,
+                    images,
+                });
+                setSuccess("Đã gửi đánh giá sách.");
+            }
+
+            closeReviewModal();
+        } catch (submitError) {
+            const message = submitError instanceof Error ? submitError.message : "Không thể gửi đánh giá.";
+            setReviewError(message);
+        } finally {
+            setReviewSubmitting(false);
+        }
+    };
+
+    const removeBookReview = async () => {
+        if (!currentReview) return;
+
+        setReviewSubmitting(true);
+        setReviewError(null);
+
+        try {
+            await reviewService.deleteBookReview(currentReview._id);
+            setSuccess("Đã xóa đánh giá sách.");
+            closeReviewModal();
+        } catch (deleteError) {
+            const message = deleteError instanceof Error ? deleteError.message : "Không thể xóa đánh giá.";
+            setReviewError(message);
+        } finally {
+            setReviewSubmitting(false);
+        }
+    };
+
+    const openLibraryReviewModal = async (libraryId: string, libraryName: string) => {
+        if (!user?._id) return;
+
+        setLibraryReviewModalOpen(true);
+        setReviewLibraryId(libraryId);
+        setReviewLibraryName(libraryName);
+        setLibraryReviewError(null);
+        setCurrentLibraryReview(null);
+        setLibraryReviewStars(5);
+        setLibraryReviewComment("");
+        setLibraryReviewImagesText("");
+        setLibraryReviewLoading(true);
+
+        try {
+            const result = await reviewService.getLibraryReviews(libraryId, { page: 1, limit: 100 });
+            const mine = result.reviews.find((review) => review.userId?._id === user._id) || null;
+
+            if (mine) {
+                setCurrentLibraryReview(mine);
+                setLibraryReviewStars(mine.stars);
+                setLibraryReviewComment(mine.comment || "");
+                setLibraryReviewImagesText(mine.images.join("\n"));
+            }
+        } catch (fetchError) {
+            const message = fetchError instanceof Error ? fetchError.message : "Không thể tải review thư viện.";
+            setLibraryReviewError(message);
+        } finally {
+            setLibraryReviewLoading(false);
+        }
+    };
+
+    const closeLibraryReviewModal = () => {
+        if (libraryReviewSubmitting) return;
+        setLibraryReviewModalOpen(false);
+        setReviewLibraryId(null);
+        setReviewLibraryName("");
+        setCurrentLibraryReview(null);
+        setLibraryReviewError(null);
+    };
+
+    const submitLibraryReview = async () => {
+        if (!reviewLibraryId) return;
+
+        setLibraryReviewSubmitting(true);
+        setLibraryReviewError(null);
+
+        const images = libraryReviewImagesText
+            .split(/\n|,/g)
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+        try {
+            if (currentLibraryReview) {
+                await reviewService.updateLibraryReview(currentLibraryReview._id, {
+                    stars: libraryReviewStars,
+                    comment: libraryReviewComment.trim() || undefined,
+                    images,
+                });
+                setSuccess("Đã cập nhật đánh giá thư viện.");
+            } else {
+                await reviewService.createLibraryReview(reviewLibraryId, {
+                    stars: libraryReviewStars,
+                    comment: libraryReviewComment.trim() || undefined,
+                    images,
+                });
+                setSuccess("Đã gửi đánh giá thư viện.");
+            }
+
+            closeLibraryReviewModal();
+        } catch (submitError) {
+            const message = submitError instanceof Error ? submitError.message : "Không thể gửi đánh giá thư viện.";
+            setLibraryReviewError(message);
+        } finally {
+            setLibraryReviewSubmitting(false);
+        }
+    };
+
+    const removeLibraryReview = async () => {
+        if (!currentLibraryReview) return;
+
+        setLibraryReviewSubmitting(true);
+        setLibraryReviewError(null);
+
+        try {
+            await reviewService.deleteLibraryReview(currentLibraryReview._id);
+            setSuccess("Đã xóa đánh giá thư viện.");
+            closeLibraryReviewModal();
+        } catch (deleteError) {
+            const message = deleteError instanceof Error ? deleteError.message : "Không thể xóa đánh giá thư viện.";
+            setLibraryReviewError(message);
+        } finally {
+            setLibraryReviewSubmitting(false);
         }
     };
 
@@ -229,7 +441,18 @@ export default function BorrowingsPage() {
 
                                             return (
                                             <tr key={item._id} className="border-b border-white/5 text-slate-200 hover:bg-slate-800/30 transition-colors">
-                                                <td className="py-2 pr-3 font-medium">{item.bookId?.title || "-"}</td>
+                                                <td className="py-2 pr-3 font-medium">
+                                                    {item.bookId?._id ? (
+                                                        <Link
+                                                            href={`/books/${item.bookId._id}`}
+                                                            className="text-blue-300 hover:text-blue-200 hover:underline"
+                                                        >
+                                                            {item.bookId?.title || "Xem sách"}
+                                                        </Link>
+                                                    ) : (
+                                                        item.bookId?.title || "-"
+                                                    )}
+                                                </td>
                                                 <td className="py-2 pr-3">{item.userId?.fullName || "-"}</td>
                                                 <td className="py-2 pr-3">{item.libraryId?.name || "-"}</td>
                                                 <td className="py-2 pr-3">
@@ -304,6 +527,30 @@ export default function BorrowingsPage() {
                                                                 : `Gia hạn +${RENEWAL_DAYS} ngày (${renewalCount}/${maxRenewals})`}
                                                         </button>
                                                     )}
+
+                                                    {!canViewAll && (item.status === "borrowed" || item.status === "returned" || item.status === "overdue") && item.bookId?._id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void openReviewModal(item.bookId._id, item.bookId.title || "Sách")}
+                                                            className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-xs text-yellow-200 hover:bg-yellow-500/20"
+                                                        >
+                                                            <span className="inline-flex items-center gap-1">
+                                                                <Star className="h-3 w-3" /> Đánh giá
+                                                            </span>
+                                                        </button>
+                                                    )}
+
+                                                    {!canViewAll && (item.status === "borrowed" || item.status === "returned" || item.status === "overdue") && item.libraryId?._id && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void openLibraryReviewModal(item.libraryId._id, item.libraryId.name || "Thư viện")}
+                                                            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                                                        >
+                                                            <span className="inline-flex items-center gap-1">
+                                                                <Star className="h-3 w-3" /> ĐG thư viện
+                                                            </span>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -327,6 +574,202 @@ export default function BorrowingsPage() {
                         </div>
                     )}
                 </section>
+
+                {reviewModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+                        <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-semibold text-white">
+                                    {currentReview ? "Cập nhật đánh giá" : "Đánh giá sách"}
+                                </h2>
+                                <button
+                                    type="button"
+                                    onClick={closeReviewModal}
+                                    disabled={reviewSubmitting}
+                                    className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <p className="mb-4 text-sm text-slate-300">{reviewBookTitle}</p>
+
+                            {reviewLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-slate-300">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Đang tải review...
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {reviewError && (
+                                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                                            {reviewError}
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-300">Số sao (1-5)</label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={5}
+                                            value={reviewStars}
+                                            onChange={(e) => setReviewStars(Math.min(5, Math.max(1, Number(e.target.value) || 1)))}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-300">Nhận xét</label>
+                                        <textarea
+                                            value={reviewComment}
+                                            onChange={(e) => setReviewComment(e.target.value)}
+                                            rows={4}
+                                            className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                            placeholder="Chia sẻ trải nghiệm của bạn về cuốn sách..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-300">Ảnh (URL, mỗi dòng 1 ảnh)</label>
+                                        <textarea
+                                            value={reviewImagesText}
+                                            onChange={(e) => setReviewImagesText(e.target.value)}
+                                            rows={3}
+                                            className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                            placeholder="https://..."
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        {currentReview && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void removeBookReview()}
+                                                disabled={reviewSubmitting}
+                                                className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+                                            >
+                                                Xóa đánh giá
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={closeReviewModal}
+                                            disabled={reviewSubmitting}
+                                            className="rounded-lg border border-slate-600/50 bg-slate-700/40 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700/60 disabled:opacity-60"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void submitReview()}
+                                            disabled={reviewSubmitting}
+                                            className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-xs font-semibold text-yellow-200 hover:bg-yellow-500/20 disabled:opacity-60"
+                                        >
+                                            {reviewSubmitting ? "Đang lưu..." : currentReview ? "Cập nhật" : "Gửi đánh giá"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {libraryReviewModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+                        <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-semibold text-white">
+                                    {currentLibraryReview ? "Cập nhật đánh giá thư viện" : "Đánh giá thư viện"}
+                                </h2>
+                                <button
+                                    type="button"
+                                    onClick={closeLibraryReviewModal}
+                                    disabled={libraryReviewSubmitting}
+                                    className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <p className="mb-4 text-sm text-slate-300">{reviewLibraryName}</p>
+
+                            {libraryReviewLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-slate-300">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Đang tải review thư viện...
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {libraryReviewError && (
+                                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                                            {libraryReviewError}
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-300">Số sao (1-5)</label>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={5}
+                                            value={libraryReviewStars}
+                                            onChange={(e) => setLibraryReviewStars(Math.min(5, Math.max(1, Number(e.target.value) || 1)))}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-300">Nhận xét</label>
+                                        <textarea
+                                            value={libraryReviewComment}
+                                            onChange={(e) => setLibraryReviewComment(e.target.value)}
+                                            rows={4}
+                                            className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                            placeholder="Chia sẻ trải nghiệm của bạn về thư viện..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-1 block text-xs font-semibold text-slate-300">Ảnh (URL, mỗi dòng 1 ảnh)</label>
+                                        <textarea
+                                            value={libraryReviewImagesText}
+                                            onChange={(e) => setLibraryReviewImagesText(e.target.value)}
+                                            rows={3}
+                                            className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                            placeholder="https://..."
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        {currentLibraryReview && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void removeLibraryReview()}
+                                                disabled={libraryReviewSubmitting}
+                                                className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
+                                            >
+                                                Xóa đánh giá
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={closeLibraryReviewModal}
+                                            disabled={libraryReviewSubmitting}
+                                            className="rounded-lg border border-slate-600/50 bg-slate-700/40 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700/60 disabled:opacity-60"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void submitLibraryReview()}
+                                            disabled={libraryReviewSubmitting}
+                                            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-60"
+                                        >
+                                            {libraryReviewSubmitting ? "Đang lưu..." : currentLibraryReview ? "Cập nhật" : "Gửi đánh giá"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </RouteGuard>
     );

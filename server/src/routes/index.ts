@@ -8,6 +8,7 @@ import borrowingRoutes from './borrowingRoutes';
 import reservationRoutes from './reservationRoutes';
 import notificationRoutes from './notificationRoutes';
 import wishlistRoutes from './wishlistRoutes';
+import reviewRoutes from './reviewRoutes';
 
 const router: IRouter = Router();
 
@@ -20,6 +21,7 @@ router.use('/borrowings', borrowingRoutes);
 router.use('/reservations', reservationRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/wishlists', wishlistRoutes);
+router.use('/reviews', reviewRoutes);
 
 // Health check
 router.get('/health', (req: Request, res: Response) => {

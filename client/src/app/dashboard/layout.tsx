@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, ShoppingCart, Home } from "lucide-react";
+import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, ShoppingCart, Home, Flag } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { useCartStore } from "@/stores/cartStore";
 import { RouteGuard } from "@/components/RouteGuard";
@@ -55,12 +55,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ? [
                 { href: "/dashboard/borrowings", label: "Quản lý mượn/trả", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
+                { href: "/dashboard/reviews", label: "Review", icon: Flag },
             ]
             : []),
         ...(user?.role === "admin"
             ? [
                 { href: "/dashboard/users", label: "Người dùng", icon: Users },
                 { href: "/dashboard/libraries", label: "Thư viện", icon: Library },
+                { href: "/dashboard/reviews", label: "Reported Reviews", icon: Flag },
             ]
             : []),
         { href: "/dashboard/profile", label: "Hồ sơ cá nhân", icon: UserRound },

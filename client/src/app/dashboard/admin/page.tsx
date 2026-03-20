@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Users, BookOpen, Library, BookCopy, TrendingUp, AlertTriangle } from "lucide-react";
+import { Users, BookOpen, Library, BookCopy, TrendingUp, AlertTriangle, Flag } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { RouteGuard } from "@/components/RouteGuard";
 import { userService } from "@/services/userService";
@@ -100,6 +100,7 @@ export default function AdminDashboard() {
                         {[
                             { label: "Thêm thư viện mới", icon: Library, href: "/dashboard/libraries" },
                             { label: "Quản lý người dùng", icon: Users, href: "/dashboard/users" },
+                            { label: "Reported Reviews", icon: Flag, href: "/dashboard/reviews" },
                             { label: "Hồ sơ cá nhân", icon: Users, href: "/dashboard/profile" },
                             { label: "Thông báo", icon: BookCopy, href: "/dashboard/notifications" },
                         ].map((action) => {
