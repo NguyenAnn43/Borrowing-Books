@@ -13,7 +13,7 @@ describe('chatbotService', () => {
 
     it('should return help instruction', async () => {
         const response = await chatbotService.processMessage('hướng dẫn');
-        expect(response).toContain('Chào bạn! Tôi là trợ lý ảo của thư viện');
+        expect(response).toContain('Hướng dẫn nhanh chatbot');
     });
 
     it('should return opening hours', async () => {
@@ -24,6 +24,7 @@ describe('chatbotService', () => {
     it('should search book with freeform text', async () => {
         vi.mocked(bookService.getBooks).mockResolvedValue({
             books: [{
+                _id: '65f1234567890abcdef1234',
                 title: 'System Design Interview',
                 author: 'Alex Xu',
                 availableCopies: 5,
@@ -40,6 +41,7 @@ describe('chatbotService', () => {
         expect(response).toContain('System Design Interview');
         expect(response).toContain('Thư viện Trung tâm'); // Shows library info directly
         expect(response).toContain('A1-06'); // Shows specific location
+        expect(response).toContain('/books/65f1234567890abcdef1234');
     });
 
     it('should handle search not found', async () => {

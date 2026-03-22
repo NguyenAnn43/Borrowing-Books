@@ -1212,7 +1212,15 @@ export const sendOverdueFineReminders = async (): Promise<number> => {
         const bookTitle = typeof bookRef.title === 'string' ? bookRef.title : 'đầu sách của bạn';
         const dueDateText = borrowing.dueDate.toLocaleDateString('vi-VN');
         const overdueDays = calculateOverdueDays(borrowing.dueDate);
-        const fineAmount = borrowing.fineAmount ?? calculateFine(overdueDays, BORROWING_SETTINGS.OVERDUE_FINE_PER_DAY);
+        const calculatedFine = calculateFine(overdueDays, BORROWING_SETTINGS.OVERDUE_FINE_PER_DAY);
+        // Some old overdue records may still store fineAmount=0; always use at least the calculated daily fine.
+        const fineAmount = Math.max(borrowing.fineAmount || 0, calculatedFine);
+
+        if ((borrowing.fineAmount || 0) < fineAmount) {
+            borrowing.isFined = true;
+            borrowing.fineAmount = fineAmount;
+            await borrowing.save();
+        }
 
         await notificationService.create({
             userId,
