@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, type ElementType, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Building2, CalendarClock, ImageUp, KeyRound, Mail, Pencil, Phone, RefreshCw, Save, Shield, UserRound, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
@@ -239,9 +240,12 @@ export default function ProfilePage() {
                                 <div className="flex items-center gap-4">
                                     <div className="relative">
                                         {user.avatar ? (
-                                            <img
+                                            <Image
                                                 src={user.avatar}
                                                 alt="Avatar"
+                                                width={56}
+                                                height={56}
+                                                unoptimized={true}
                                                 className="h-14 w-14 rounded-full object-cover border border-white/20"
                                             />
                                         ) : (

@@ -14,14 +14,12 @@ export function useSearch(options: UseSearchOptions = {}) {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedTerm, setDebouncedTerm] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const isSearching = searchTerm !== debouncedTerm;
 
   // Debounce search term
   useEffect(() => {
-    setIsSearching(true);
     const timer = setTimeout(() => {
       setDebouncedTerm(searchTerm);
-      setIsSearching(false);
     }, debounceMs);
 
     return () => clearTimeout(timer);

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Trash2, BookOpen, Loader2, ArrowRight } from "lucide-react";
 import { useCartStore } from "@/stores/cartStore";
 import { borrowingService } from "@/services/borrowingService";

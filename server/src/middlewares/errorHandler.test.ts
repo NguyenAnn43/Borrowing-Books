@@ -6,12 +6,12 @@ describe('errorHandler duplicate key mapping', () => {
     const req = {
         originalUrl: '/api/books',
         method: 'POST',
-    } as any;
+    } as unknown as import('express').Request;
 
     const res = {
         status: vi.fn().mockReturnThis(),
         json: vi.fn(),
-    } as any;
+    } as unknown as import('express').Response;
 
     const next = vi.fn();
 
