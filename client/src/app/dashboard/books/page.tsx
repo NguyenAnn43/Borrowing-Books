@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import type { LucideIcon } from "lucide-react";
 import {
     BookOpen,
@@ -698,9 +699,11 @@ export default function DashboardBooksPage() {
                                     className="group overflow-hidden rounded-2xl border border-white/10 bg-slate-900/70 transition hover:border-blue-400/30"
                                 >
                                     <div className="relative aspect-[16/9] overflow-hidden border-b border-white/10 bg-slate-800">
-                                        <img
+                                        <Image
                                             src={coverSrc}
                                             alt={`bia-sach-${book.title}`}
+                                            fill
+                                            sizes="(max-width: 768px) 100vw, (max-width: 1536px) 50vw, 33vw"
                                             className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                             onError={() => markCoverBroken(book._id)}
                                         />
@@ -933,9 +936,11 @@ export default function DashboardBooksPage() {
                                     <p className="text-sm font-semibold text-white">Preview anh bia</p>
                                     <div className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-800">
                                         <div className="aspect-[3/4]">
-                                            <img
+                                            <Image
                                                 src={previewCover}
                                                 alt="preview-bia-sach"
+                                                fill
+                                                sizes="(max-width: 768px) 90vw, 320px"
                                                 className="h-full w-full object-cover"
                                                 onError={(event) => {
                                                     event.currentTarget.src = pickCoverBySeed(`${bookForm.title}-${bookForm.author}`);

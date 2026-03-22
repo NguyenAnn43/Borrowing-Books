@@ -653,8 +653,8 @@ export default function BorrowingsPage() {
                                 type="button"
                                 onClick={() => setSearchMode("list")}
                                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${searchMode === "list"
-                                        ? "border border-indigo-400 bg-indigo-500/30 text-indigo-100"
-                                        : "border border-slate-500/40 bg-slate-700/40 text-slate-300 hover:bg-slate-700/60"
+                                    ? "border border-indigo-400 bg-indigo-500/30 text-indigo-100"
+                                    : "border border-slate-500/40 bg-slate-700/40 text-slate-300 hover:bg-slate-700/60"
                                     }`}
                             >
                                 Lọc danh sách
@@ -663,8 +663,8 @@ export default function BorrowingsPage() {
                                 type="button"
                                 onClick={() => setSearchMode("cross")}
                                 className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${searchMode === "cross"
-                                        ? "border border-cyan-400 bg-cyan-500/30 text-cyan-100"
-                                        : "border border-slate-500/40 bg-slate-700/40 text-slate-300 hover:bg-slate-700/60"
+                                    ? "border border-cyan-400 bg-cyan-500/30 text-cyan-100"
+                                    : "border border-slate-500/40 bg-slate-700/40 text-slate-300 hover:bg-slate-700/60"
                                     }`}
                             >
                                 Tra cứu trả chéo
@@ -803,8 +803,8 @@ export default function BorrowingsPage() {
                                 goToPage(1);
                             }}
                             className={`rounded-2xl border px-4 py-3 text-left transition ${selectedStatus === "pending"
-                                    ? "border-blue-400 bg-blue-500/20"
-                                    : "border-white/10 bg-slate-900/60 hover:border-blue-500/40"
+                                ? "border-blue-400 bg-blue-500/20"
+                                : "border-white/10 bg-slate-900/60 hover:border-blue-500/40"
                                 }`}
                         >
                             <p className="text-xs uppercase tracking-wide text-slate-400">Chờ xác nhận</p>
@@ -817,8 +817,8 @@ export default function BorrowingsPage() {
                                 goToPage(1);
                             }}
                             className={`rounded-2xl border px-4 py-3 text-left transition ${selectedStatus === "borrowed"
-                                    ? "border-indigo-400 bg-indigo-500/20"
-                                    : "border-white/10 bg-slate-900/60 hover:border-indigo-500/40"
+                                ? "border-indigo-400 bg-indigo-500/20"
+                                : "border-white/10 bg-slate-900/60 hover:border-indigo-500/40"
                                 }`}
                         >
                             <p className="text-xs uppercase tracking-wide text-slate-400">Đang mượn</p>
@@ -831,8 +831,8 @@ export default function BorrowingsPage() {
                                 goToPage(1);
                             }}
                             className={`rounded-2xl border px-4 py-3 text-left transition ${selectedStatus === "return_transit"
-                                    ? "border-cyan-400 bg-cyan-500/20"
-                                    : "border-white/10 bg-slate-900/60 hover:border-cyan-500/40"
+                                ? "border-cyan-400 bg-cyan-500/20"
+                                : "border-white/10 bg-slate-900/60 hover:border-cyan-500/40"
                                 }`}
                         >
                             <p className="text-xs uppercase tracking-wide text-slate-400">Chờ nhận về kho</p>
@@ -845,8 +845,8 @@ export default function BorrowingsPage() {
                                 goToPage(1);
                             }}
                             className={`rounded-2xl border px-4 py-3 text-left transition ${selectedStatus === "overdue"
-                                    ? "border-amber-400 bg-amber-500/20"
-                                    : "border-white/10 bg-slate-900/60 hover:border-amber-500/40"
+                                ? "border-amber-400 bg-amber-500/20"
+                                : "border-white/10 bg-slate-900/60 hover:border-amber-500/40"
                                 }`}
                         >
                             <p className="text-xs uppercase tracking-wide text-slate-400">Quá hạn</p>
@@ -890,8 +890,8 @@ export default function BorrowingsPage() {
                                 goToPage(1);
                             }}
                             className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${selectedStatus === null
-                                    ? "bg-indigo-500/40 border-2 border-indigo-400 text-indigo-100 shadow-lg shadow-indigo-500/20"
-                                    : "bg-slate-700/40 border-2 border-slate-600/50 text-slate-300 hover:bg-slate-700/60 hover:border-slate-500"
+                                ? "bg-indigo-500/40 border-2 border-indigo-400 text-indigo-100 shadow-lg shadow-indigo-500/20"
+                                : "bg-slate-700/40 border-2 border-slate-600/50 text-slate-300 hover:bg-slate-700/60 hover:border-slate-500"
                                 }`}
                         >
                             Tất cả
@@ -905,8 +905,8 @@ export default function BorrowingsPage() {
                                     goToPage(1);
                                 }}
                                 className={`rounded-lg px-4 py-2 text-xs font-semibold transition-all duration-200 ${selectedStatus === status.value
-                                        ? `${getStatusColor(status.value)} shadow-lg opacity-100`
-                                        : "bg-slate-700/40 border-2 border-slate-600/50 text-slate-300 hover:bg-slate-700/60 hover:border-slate-500"
+                                    ? `${getStatusColor(status.value)} shadow-lg opacity-100`
+                                    : "bg-slate-700/40 border-2 border-slate-600/50 text-slate-300 hover:bg-slate-700/60 hover:border-slate-500"
                                     }`}
                             >
                                 {status.label}
@@ -955,6 +955,10 @@ export default function BorrowingsPage() {
                                     const hasUnpaidFine = hasFine && !item.finePaid;
                                     const isCurrentActionLoading = actionLoading === item._id;
                                     const canReportIssue = item.status === "borrowed" || item.status === "overdue";
+                                    const canReviewBook =
+                                        !canViewAll &&
+                                        Boolean(item.bookId?._id) &&
+                                        (item.status === "borrowed" || item.status === "returned" || item.status === "overdue" || item.status === "return_transit");
                                     const flowHint = getLibrarianFlowHint(item, librarianLibraryId);
 
                                     let primaryActionLabel: string | null = null;
@@ -1076,6 +1080,17 @@ export default function BorrowingsPage() {
                                                         >
                                                             Xem chi tiết
                                                         </Link>
+                                                        {canReviewBook && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void openReviewModal(item.bookId!._id, item.bookId?.title || "Sách")}
+                                                                className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1.5 text-xs text-yellow-200 hover:bg-yellow-500/20"
+                                                            >
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <Star className="h-3 w-3" /> ĐG sách
+                                                                </span>
+                                                            </button>
+                                                        )}
                                                         {canReportIssue && (
                                                             <button
                                                                 type="button"
@@ -1179,6 +1194,10 @@ export default function BorrowingsPage() {
                                                 item.status === "overdue" ||
                                                 item.status === "returned" ||
                                                 item.status === "return_transit";
+                                            const canReviewBook =
+                                                !canViewAll &&
+                                                Boolean(item.bookId?._id) &&
+                                                (item.status === "borrowed" || item.status === "returned" || item.status === "overdue" || item.status === "return_transit");
 
                                             return (
                                                 <tr key={item._id} className="border-b border-white/5 text-slate-200 transition-colors hover:bg-slate-800/30">
@@ -1207,8 +1226,8 @@ export default function BorrowingsPage() {
                                                         {item.isFined && item.fineAmount > 0 ? (
                                                             <span
                                                                 className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.finePaid
-                                                                        ? "bg-emerald-500/20 text-emerald-200"
-                                                                        : "bg-amber-500/20 text-amber-200"
+                                                                    ? "bg-emerald-500/20 text-emerald-200"
+                                                                    : "bg-amber-500/20 text-amber-200"
                                                                     }`}
                                                             >
                                                                 {item.finePaid ? "Đã thanh toán" : "Chưa thanh toán"}
@@ -1258,6 +1277,29 @@ export default function BorrowingsPage() {
                                                                     {reachedRenewalLimit
                                                                         ? `Hết lượt (${renewalCount}/${maxRenewals})`
                                                                         : `Gia hạn +${RENEWAL_DAYS} ngày (${renewalCount}/${maxRenewals})`}
+                                                                </button>
+                                                            )}
+
+                                                            {!canViewAll && (item.status === "borrowed" || item.status === "returned" || item.status === "overdue" || item.status === "return_transit") && item.libraryId?._id && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => void openLibraryReviewModal(item.libraryId._id, item.libraryId.name || "Thư viện")}
+                                                                    className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                                                                >
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <Star className="h-3 w-3" /> ĐG thư viện
+                                                                    </span>
+                                                                </button>
+                                                            )}
+                                                            {canReviewBook && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => void openReviewModal(item.bookId!._id, item.bookId?.title || "Sách")}
+                                                                    className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-xs text-yellow-200 hover:bg-yellow-500/20"
+                                                                >
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <Star className="h-3 w-3" /> ĐG sách
+                                                                    </span>
                                                                 </button>
                                                             )}
 

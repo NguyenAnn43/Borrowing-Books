@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as chatbotService from './chatbotService';
 import * as bookService from './bookService';
+import type { IBook } from '../types';
 
 vi.mock('./bookService', () => ({
     getBooks: vi.fn()
@@ -30,7 +31,7 @@ describe('chatbotService', () => {
                 availableCopies: 5,
                 libraryId: { name: 'Thư viện Trung tâm' },
                 location: 'A1-06'
-            } as any],
+            } as unknown as IBook],
             pagination: { total: 1, limit: 10, pages: 1, page: 1, hasNext: false, hasPrev: false }
         });
 

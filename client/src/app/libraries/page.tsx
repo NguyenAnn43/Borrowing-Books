@@ -76,6 +76,34 @@ export default function LibrariesPage() {
   const autoSelectLibraryId = searchParams.get("libraryId");
   const autoSelectedRef = useRef(false);
 
+  // Load books for selected library
+  const loadBooksForLibrary = useCallback(async (library: ILibrary, page = 1) => {
+    setIsLoadingBooks(true);
+    setError("");
+    try {
+      const { books: fetchedBooks, pagination: paginationData } = await bookService.getBooks({
+        page,
+        limit: 12,
+        libraryId: library._id,
+      });
+      setBooks(fetchedBooks);
+      setPagination(paginationData);
+      setCurrentPage(page);
+      setSelectedLibrary(library);
+
+      // Scroll to books section
+      setTimeout(() => {
+        booksContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } catch {
+      setError("Không tải được danh sách sách. Vui lòng thử lại.");
+      setBooks([]);
+      setPagination(null);
+    } finally {
+      setIsLoadingBooks(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (autoSelectLibraryId && libraries.length > 0 && !autoSelectedRef.current) {
       const target = libraries.find((lib) => lib._id === autoSelectLibraryId);
@@ -84,7 +112,7 @@ export default function LibrariesPage() {
         void loadBooksForLibrary(target, 1);
       }
     }
-  }, [autoSelectLibraryId, libraries]);
+  }, [autoSelectLibraryId, libraries, loadBooksForLibrary]);
 
   // Filter libraries based on search
   useEffect(() => {
@@ -102,34 +130,6 @@ export default function LibrariesPage() {
     );
     setFilteredLibraries(filtered);
   }, [searchText, libraries]);
-
-  // Load books for selected library
-  const loadBooksForLibrary = useCallback(async (library: ILibrary, page = 1) => {
-    setIsLoadingBooks(true);
-    setError("");
-    try {
-      const { books: fetchedBooks, pagination: paginationData } = await bookService.getBooks({
-        page,
-        limit: 12,
-        libraryId: library._id,
-      });
-      setBooks(fetchedBooks);
-      setPagination(paginationData);
-      setCurrentPage(page);
-      setSelectedLibrary(library);
-      
-      // Scroll to books section
-      setTimeout(() => {
-        booksContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
-    } catch {
-      setError("Không tải được danh sách sách. Vui lòng thử lại.");
-      setBooks([]);
-      setPagination(null);
-    } finally {
-      setIsLoadingBooks(false);
-    }
-  }, []);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

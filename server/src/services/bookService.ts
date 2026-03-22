@@ -159,13 +159,26 @@ export const getBookById = async (id: string, userId?: string): Promise<IBook> =
  * Priority matching by normalized ISBN. Fallback to title+author if ISBN absent.
  */
 export const getBookAlternatives = async (id: string, userId?: string): Promise<GetBookAlternativesResult> => {
+    const toPlainBook = (value: unknown): IBook => {
+        if (value && typeof value === 'object') {
+            const candidate = value as { toJSON?: () => unknown; toObject?: () => unknown };
+            if (typeof candidate.toJSON === 'function') {
+                return candidate.toJSON() as IBook;
+            }
+            if (typeof candidate.toObject === 'function') {
+                return candidate.toObject() as IBook;
+            }
+        }
+        return value as IBook;
+    };
+
     const sourceDoc = await Book.findById(id).populate('libraryId', 'name code address');
 
     if (!sourceDoc) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
     }
     
-    const sourceBook = sourceDoc.toJSON() as unknown as IBook;
+    const sourceBook = toPlainBook(sourceDoc);
 
     const matchedBy: 'isbn' | 'title-author' = sourceBook.isbnNormalized ? 'isbn' : 'title-author';
 
@@ -185,7 +198,7 @@ export const getBookAlternatives = async (id: string, userId?: string): Promise<
         .populate('libraryId', 'name code address')
         .sort({ availableCopies: -1, createdAt: -1 });
         
-    const alternatives = alternativeDocs.map(doc => doc.toJSON() as unknown as IBook);
+    const alternatives = alternativeDocs.map((doc) => toPlainBook(doc));
 
     if (userId && alternatives.length > 0) {
         const alternativeIds = alternatives.map((book) => book._id.toString());

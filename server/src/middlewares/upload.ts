@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import { AppError } from '../utils';
+import { AuthRequest } from '../types';
 
 const uploadRoot = path.resolve(process.cwd(), 'uploads/avatars');
 if (!fs.existsSync(uploadRoot)) {
@@ -51,7 +52,7 @@ const reviewStorage = multer.diskStorage({
         const safeOriginal = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
         const extension = path.extname(safeOriginal) || '.jpg';
         const baseName = path.basename(safeOriginal, extension);
-        const user = (req as any).user;
+        const user = (req as AuthRequest).user;
         const prefix = user ? user._id.toString() : 'guest';
         cb(null, `review_${prefix}_${Date.now()}_${baseName}${extension}`);
     },
@@ -65,4 +66,3 @@ export const uploadReviewImages = multer({
         files: 5, // max 5 files
     },
 });
-

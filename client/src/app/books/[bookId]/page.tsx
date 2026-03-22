@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import BookDetailView from "@/app/dashboard/books/page_book_detail";
 import { Header } from "@/components/Header";
@@ -42,7 +42,7 @@ export default function BookDetailPage() {
     void getCurrentUser();
   }, [getCurrentUser]);
 
-  const loadReviews = async (targetBookId: string) => {
+  const loadReviews = useCallback(async (targetBookId: string) => {
     setReviewsLoading(true);
     setReviewsError("");
     try {
@@ -69,10 +69,10 @@ export default function BookDetailPage() {
     } finally {
       setReviewsLoading(false);
     }
-  };
+  }, [user?._id, user?.role]);
 
-  const loadCanReview = async (targetBookId: string) => {
-    if (!isAuthenticated || !user || user.role !== "user") {
+  const loadCanReview = useCallback(async (targetBookId: string) => {
+    if (!isAuthenticated || user?.role !== "user") {
       setCanReview(false);
       setCanReviewLoading(false);
       return;
@@ -91,7 +91,7 @@ export default function BookDetailPage() {
     } finally {
       setCanReviewLoading(false);
     }
-  };
+  }, [isAuthenticated, user?.role]);
 
   useEffect(() => {
     const fetchBookDetail = async () => {
@@ -149,7 +149,7 @@ export default function BookDetailPage() {
     };
 
     void fetchBookDetail();
-  }, [bookId, isAuthenticated, user?._id]);
+  }, [bookId, loadCanReview, loadReviews]);
 
   const handleReserve = async () => {
     if (!book) return;
@@ -268,7 +268,7 @@ export default function BookDetailPage() {
           canReview={canReview}
           canReviewLoading={canReviewLoading}
           myBookReview={myBookReview}
-          onReviewChanged={() => loadReviews(bookId)}
+          onReviewChanged={() => void loadReviews(bookId)}
         />
         
         <Footer />

@@ -14,8 +14,9 @@ const getBorrowGuide = (): string => {
 const getReservationGuide = (): string => {
     return `Hướng dẫn đặt trước nhanh:\n1. Chỉ đặt trước khi sách đã hết (availableCopies = 0).\n2. Vào trang chi tiết sách và bấm Đặt trước.\n3. Theo dõi trạng thái tại Dashboard > Reservations.\n4. Khi thư viện báo READY, bạn đến nhận trong thời hạn quy định.`;
 };
+import type { IBook } from '../types';
 
-export const processMessage = async (message: string, userId?: string): Promise<string> => {
+export const processMessage = async (message: string, _userId?: string): Promise<string> => {
     const lowerMessage = message.toLowerCase().trim();
 
     // Intent: LIBRARY_INFO
@@ -73,14 +74,14 @@ export const processMessage = async (message: string, userId?: string): Promise<
     // Intent: EXPLICIT/IMPLICIT BOOK SEARCH
     // Remove conversational fillers and special characters so only the core keywords remain.
     const stopWordsList = new Set([
-        'cho', 'tôi', 'mình', 'nhé', 'nha', 'với', 'ạ', 'đi', 'nhá', 'nhỉ', 'không', 
-        'giúp', 'xin', 'hỏi', 'cuốn', 'sách', 'quyển', 'này', 'thư', 'viện', 'nào', 
-        'ở', 'đâu', 'tìm', 'kiếm', 'thông', 'tin', 'về', 'đang', 'muốn', 'xem', 'chi', 
+        'cho', 'tôi', 'mình', 'nhé', 'nha', 'với', 'ạ', 'đi', 'nhá', 'nhỉ', 'không',
+        'giúp', 'xin', 'hỏi', 'cuốn', 'sách', 'quyển', 'này', 'thư', 'viện', 'nào',
+        'ở', 'đâu', 'tìm', 'kiếm', 'thông', 'tin', 'về', 'đang', 'muốn', 'xem', 'chi',
         'tiết', 'của', 'có', 'ai', 'làm', 'sao', 'để', 'được', 'chứ', 'vậy', 'mượn', 'những', 'các'
     ]);
-    
+
     // Clean string: remove punctuation, split by space, filter stop words
-    let keyword = lowerMessage
+    const keyword = lowerMessage
         .replace(/[?!.,;'"]/g, ' ')
         .split(/\s+/)
         .filter(word => word && !stopWordsList.has(word))
@@ -94,14 +95,15 @@ export const processMessage = async (message: string, userId?: string): Promise<
     try {
         const result = await bookService.getBooks({ q: keyword, limit: 3, page: 1, includeWishlist: false });
         if (result.books.length > 0) {
-            const bookList = result.books.map((b: any) => {
-                const libName = b.libraryId?.name || 'Chưa cập nhật';
+            const bookList = result.books.map((b: IBook) => {
+                const populatedLibrary = b.libraryId as unknown as { name?: string };
+                const libName = populatedLibrary?.name || 'Chưa cập nhật';
                 const statusStr = b.availableCopies > 0 ? `Còn ${b.availableCopies} cuốn` : 'Tạm hết sách';
                 const detailLink = b._id ? `${clientBaseUrl}/books/${b._id}` : '';
                 return `- 📖 "${b.title}" (Tác giả: ${b.author})\n  📍 Thuộc: ${libName} (Khu vực kệ: ${b.location || 'Đang cập nhật'})\n  🏷️ Trạng thái: ${statusStr}${detailLink ? `\n  🔗 Xem chi tiết: ${detailLink}` : ''}`;
             }).join('\n\n');
             const prefix = result.pagination.total > 1 ? `Mình tìm thấy ${result.pagination.total} kết quả phù hợp với từ khóa "${keyword}". Gửi bạn thông tin các cuốn sách:` : `Mình tìm thấy cuốn sách bạn cần đây:`;
-            
+
             return `${prefix}\n\n${bookList}\n\nBạn có thể bấm link chi tiết để mở trực tiếp trang sách và thao tác mượn/đặt trước.`;
         } else {
             return `Rất tiếc, hiện tại thư viện không có cuốn nào khớp với từ khóa "${keyword}". Bạn kiểm tra lại tên sách giúp mình nha!`;

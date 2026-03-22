@@ -321,7 +321,7 @@ describe('borrowingService.payFine', () => {
         const receivingLibraryId = new Types.ObjectId();
         const borrowing = makeBorrowing({
             libraryId: homeLibraryId,
-            returnHandledLibraryId: receivingLibraryId as any,
+            returnHandledLibraryId: receivingLibraryId as unknown as IBorrowing['returnHandledLibraryId'],
             status: BORROWING_STATUS.RETURN_TRANSIT,
             isFined: true,
             finePaid: false,
@@ -351,7 +351,7 @@ describe('borrowingService.reportLostOrDamaged', () => {
             libraryId, 
             status: BORROWING_STATUS.BORROWED, 
             fineAmount: 0,
-            bookId: bookId as any
+            bookId: bookId as unknown as IBorrowing['bookId']
         });
         
         mockBorrowingFindById.mockReturnValue({
@@ -377,7 +377,10 @@ describe('borrowingService.reportLostOrDamaged', () => {
     it('reports a book as damaged and calculates penalty correctly', async () => {
         const bookId = new Types.ObjectId();
         const book = makeBook({ _id: bookId, price: 100000, totalCopies: 5 });
-        const borrowing = makeBorrowing({ status: BORROWING_STATUS.BORROWED, bookId: bookId as any });
+        const borrowing = makeBorrowing({
+            status: BORROWING_STATUS.BORROWED,
+            bookId: bookId as unknown as IBorrowing['bookId'],
+        });
         
         mockBorrowingFindById.mockReturnValue({
             session: vi.fn().mockResolvedValue(borrowing)
@@ -401,7 +404,7 @@ describe('borrowingService.reportLostOrDamaged', () => {
             status: BORROWING_STATUS.OVERDUE,
             fineAmount: 50000,
             finePaid: true,
-            bookId: bookId as any,
+            bookId: bookId as unknown as IBorrowing['bookId'],
         });
 
         mockBorrowingFindById.mockReturnValue({

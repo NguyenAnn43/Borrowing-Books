@@ -75,7 +75,7 @@ export default function Chatbot() {
         ...prev,
         { id: (Date.now() + 1).toString(), role: "bot", content: botResponse },
       ]);
-    } catch (error) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         { id: (Date.now() + 1).toString(), role: "bot", content: "Đã có lỗi xảy ra. Hãy thử lại sau." },
