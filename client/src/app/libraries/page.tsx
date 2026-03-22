@@ -2,7 +2,6 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { libraryService } from "@/services/libraryService";
 import { bookService } from "@/services/bookService";
 import { Header } from "@/components/Header";
@@ -46,6 +45,7 @@ export default function LibrariesPage() {
   const [isLoadingBooks, setIsLoadingBooks] = useState(false);
   const [error, setError] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [autoSelectLibraryId, setAutoSelectLibraryId] = useState<string | null>(null);
   const booksContainerRef = useRef<HTMLDivElement>(null);
 
   // Load libraries
@@ -72,9 +72,13 @@ export default function LibrariesPage() {
   }, [loadLibraries]);
 
   // Auto-select library from query param (e.g. /libraries?libraryId=xxx)
-  const searchParams = useSearchParams();
-  const autoSelectLibraryId = searchParams.get("libraryId");
   const autoSelectedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setAutoSelectLibraryId(params.get("libraryId"));
+  }, []);
 
   // Load books for selected library
   const loadBooksForLibrary = useCallback(async (library: ILibrary, page = 1) => {

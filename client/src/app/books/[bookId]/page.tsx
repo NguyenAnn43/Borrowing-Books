@@ -268,7 +268,7 @@ export default function BookDetailPage() {
           canReview={canReview}
           canReviewLoading={canReviewLoading}
           myBookReview={myBookReview}
-          onReviewChanged={() => void loadReviews(bookId)}
+          onReviewChanged={() => loadReviews(bookId)}
         />
         
         <Footer />
