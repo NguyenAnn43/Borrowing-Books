@@ -66,6 +66,10 @@ export default function HomePage() {
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [error, setError] = useState<string>("");
 
+  const hasInitializedRef = useRef(false);
+  const browseSectionRef = useRef<HTMLElement>(null);
+  const [shouldLoadLibraryPresence, setShouldLoadLibraryPresence] = useState(false);
+
   const [wishlistMessage, setWishlistMessage] = useState<string>("");
   const [wishlistMessageType, setWishlistMessageType] = useState<"info" | "error">("info");
   const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
