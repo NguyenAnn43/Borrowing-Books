@@ -95,13 +95,19 @@ export default function BookDetailView({
   const [reviewStars, setReviewStars] = useState<number>(5);
   const [reviewComment, setReviewComment] = useState<string>("");
   const [reviewImagesText, setReviewImagesText] = useState<string>("");
+  const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewSubmitMessage, setReviewSubmitMessage] = useState<string>("");
   const [reviewSubmitError, setReviewSubmitError] = useState<string>("");
+  const [reviewGuidelinesAccepted, setReviewGuidelinesAccepted] = useState(false);
+  const [hideModalOpen, setHideModalOpen] = useState(false);
+  const [hideReason, setHideReason] = useState("");
+  const [hideTargetReview, setHideTargetReview] = useState<IBookReview | null>(null);
 
   const canReportReview = user?.role === "user" || user?.role === "librarian";
   const isAdmin = user?.role === "admin";
   const canShowReviewForm = user?.role === "user";
+  const isMyReviewBlocked = Boolean(myBookReview?.isHidden);
   const averageRating = reviews.length
     ? Math.round((reviews.reduce((sum, item) => sum + item.stars, 0) / reviews.length) * 10) / 10
     : 0;
@@ -112,11 +118,14 @@ export default function BookDetailView({
       setReviewStars(myBookReview.stars);
       setReviewComment(myBookReview.comment || "");
       setReviewImagesText(myBookReview.images.join("\n"));
+      setReviewGuidelinesAccepted(true);
     } else {
       setReviewStars(5);
       setReviewComment("");
       setReviewImagesText("");
+      setReviewGuidelinesAccepted(false);
     }
+    setSelectedImageFiles([]);
   }, [myBookReview]);
 
   const handleReportReview = async (reviewId: string) => {
@@ -133,8 +142,8 @@ export default function BookDetailView({
 
   const submitReportReview = async () => {
     if (!targetReviewId) return;
-    if (!reportReason.trim()) {
-      setReportError("Vui lòng nhập lý do report.");
+    if (reportReason.trim().length < 5) {
+      setReportError("Lý do report phải có ít nhất 5 ký tự.");
       return;
     }
 
@@ -168,16 +177,27 @@ export default function BookDetailView({
       return;
     }
 
+    if (!myBookReview && !reviewGuidelinesAccepted) {
+      setReviewSubmitError("Bạn cần xác nhận đã đọc quy tắc review trước khi đăng.");
+      return;
+    }
+
     setReviewSubmitting(true);
     setReviewSubmitError("");
     setReviewSubmitMessage("");
 
-    const images = reviewImagesText
+    const pastedImages = reviewImagesText
       .split(/\n|,/g)
       .map((item) => item.trim())
       .filter(Boolean);
 
     try {
+      let uploadedUrls: string[] = [];
+      if (selectedImageFiles.length > 0) {
+        uploadedUrls = await reviewService.uploadReviewImages(selectedImageFiles);
+      }
+      
+      const images = [...pastedImages, ...uploadedUrls];
       if (myBookReview) {
         await reviewService.updateBookReview(myBookReview._id, {
           stars: reviewStars,
@@ -190,6 +210,7 @@ export default function BookDetailView({
           stars: reviewStars,
           comment: reviewComment.trim() || undefined,
           images,
+          agreedToGuidelines: true,
         });
         setReviewSubmitMessage("Đã đăng review thành công.");
       }
@@ -202,6 +223,7 @@ export default function BookDetailView({
       setReviewSubmitError(message);
     } finally {
       setReviewSubmitting(false);
+      setSelectedImageFiles([]);
     }
   };
 
@@ -229,6 +251,14 @@ export default function BookDetailView({
   const handleAdminToggleHide = async (review: IBookReview) => {
     if (!isAdmin) return;
 
+    if (!review.isHidden) {
+      setHideTargetReview(review);
+      setHideReason("");
+      setHideModalOpen(true);
+      setModerationError("");
+      return;
+    }
+
     setModeratingReviewId(review._id);
     setModerationMessage("");
     setModerationError("");
@@ -242,6 +272,40 @@ export default function BookDetailView({
       });
 
       setModerationMessage(review.isHidden ? "Đã hiển thị lại review." : "Đã ẩn review.");
+      if (onReviewChanged) {
+        await onReviewChanged();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Không thể cập nhật trạng thái review.";
+      setModerationError(message);
+    } finally {
+      setModeratingReviewId(null);
+    }
+  };
+
+  const submitAdminHideReview = async () => {
+    if (!hideTargetReview) return;
+    if (hideReason.trim().length < 5) {
+      setModerationError("Lý do ẩn review phải có ít nhất 5 ký tự.");
+      return;
+    }
+
+    setModeratingReviewId(hideTargetReview._id);
+    setModerationMessage("");
+    setModerationError("");
+
+    try {
+      await reviewService.moderateReview({
+        reviewType: "book",
+        reviewId: hideTargetReview._id,
+        action: "hide",
+        note: hideReason.trim(),
+      });
+
+      setModerationMessage("Đã ẩn review và gửi thông báo vi phạm cho người dùng.");
+      setHideModalOpen(false);
+      setHideReason("");
+      setHideTargetReview(null);
       if (onReviewChanged) {
         await onReviewChanged();
       }
@@ -360,9 +424,12 @@ export default function BookDetailView({
             >
               {book.availableCopies > 0 ? "Available" : "Out of stock"} ({book.availableCopies}/{book.totalCopies})
             </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              Library: {book.libraryId?.name || "Không xác định"}
-            </span>
+            <Link
+              href={`/libraries?libraryId=${book.libraryId?._id || ""}`}
+              className="text-xs font-semibold text-[#2b6cee] hover:underline dark:text-blue-400"
+            >
+              📚 Thư viện: {book.libraryId?.name || "Không xác định"}
+            </Link>
 
             {(user?.role === "user" || !user) && (
               <button
@@ -479,6 +546,10 @@ export default function BookDetailView({
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-700/30 dark:bg-amber-900/10 dark:text-amber-300">
                 Bạn cần mượn sách này trước khi đăng review.
               </p>
+            ) : isMyReviewBlocked ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-700/30 dark:bg-red-900/10 dark:text-red-300">
+                Review trước của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng, nên bạn không thể review lại cuốn sách này.
+              </p>
             ) : (
               <div className="space-y-3">
                 {reviewSubmitMessage && (
@@ -527,15 +598,46 @@ export default function BookDetailView({
                 </div>
 
                 <div>
+                  <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-300">Quy tắc review</p>
+                  <ul className="mb-2 list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-300">
+                    <li>Ngôn từ lịch sự, không công kích cá nhân.</li>
+                    <li>Không spam, không nội dung sai sự thật.</li>
+                    <li>Chỉ chia sẻ trải nghiệm thực tế liên quan sách.</li>
+                  </ul>
+                  {!myBookReview && (
+                    <label className="flex items-start gap-2 text-xs text-slate-600 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={reviewGuidelinesAccepted}
+                        onChange={(e) => setReviewGuidelinesAccepted(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                      />
+                      <span>Tôi đã đọc và cam kết tuân thủ quy tắc review.</span>
+                    </label>
+                  )}
+                </div>
+
+                <div>
                   <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                    <ImageIcon className="h-3.5 w-3.5" /> Ảnh đính kèm (URL, mỗi dòng 1 ảnh)
+                    <ImageIcon className="h-3.5 w-3.5" /> Ảnh đính kèm
                   </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setSelectedImageFiles(Array.from(e.target.files).slice(0, 5));
+                      }
+                    }}
+                    className="mb-2 block w-full text-sm text-slate-500 file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 dark:text-slate-400 dark:file:bg-blue-900/30 dark:file:text-blue-300"
+                  />
                   <textarea
                     value={reviewImagesText}
                     onChange={(e) => setReviewImagesText(e.target.value)}
-                    rows={3}
+                    rows={2}
                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#111318] outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-[#101622] dark:text-white dark:focus:ring-blue-900/40"
-                    placeholder="https://..."
+                    placeholder="Hoặc dán URL ảnh có sẵn (mỗi dòng 1 ảnh)"
                   />
                 </div>
 
@@ -553,7 +655,7 @@ export default function BookDetailView({
                   <button
                     type="button"
                     onClick={() => void handleSaveMyReview()}
-                    disabled={reviewSubmitting}
+                    disabled={reviewSubmitting || isMyReviewBlocked || (!myBookReview && !reviewGuidelinesAccepted)}
                     className="rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60"
                   >
                     {reviewSubmitting ? "Đang lưu..." : myBookReview ? "Cập nhật review" : "Đăng review"}
@@ -806,6 +908,7 @@ export default function BookDetailView({
               className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
               placeholder="Nhập lý do report..."
             />
+            <p className="mt-1 text-xs text-slate-400">Tối thiểu 5 ký tự.</p>
 
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -819,10 +922,59 @@ export default function BookDetailView({
               <button
                 type="button"
                 onClick={() => void submitReportReview()}
-                disabled={Boolean(reportSubmittingId)}
+                disabled={Boolean(reportSubmittingId) || reportReason.trim().length < 5}
                 className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
               >
                 {reportSubmittingId ? "Đang gửi..." : "Gửi report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hideModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-white">Ẩn review vi phạm</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  if (moderatingReviewId) return;
+                  setHideModalOpen(false);
+                }}
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="mb-2 text-sm text-slate-300">Nhập lý do vi phạm để thông báo rõ cho người dùng.</p>
+            <textarea
+              rows={4}
+              value={hideReason}
+              onChange={(e) => setHideReason(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-500"
+              placeholder="Ví dụ: Nội dung công kích cá nhân, sai sự thật..."
+            />
+            <p className="mt-1 text-xs text-slate-400">Tối thiểu 5 ký tự.</p>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setHideModalOpen(false)}
+                disabled={Boolean(moderatingReviewId)}
+                className="rounded-lg border border-slate-600/50 bg-slate-700/40 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700/60 disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitAdminHideReview()}
+                disabled={Boolean(moderatingReviewId) || hideReason.trim().length < 5}
+                className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"
+              >
+                {moderatingReviewId ? "Đang xử lý..." : "Xác nhận ẩn review"}
               </button>
             </div>
           </div>

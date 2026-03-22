@@ -2,10 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { libraryService } from "@/services/libraryService";
 import { bookService } from "@/services/bookService";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import LibraryReviewSection from "./LibraryReviewSection";
 import type { ILibrary, IBook, IPagination } from "@/types";
 
 const FALLBACK_COVER =
@@ -68,6 +70,21 @@ export default function LibrariesPage() {
   useEffect(() => {
     void loadLibraries();
   }, [loadLibraries]);
+
+  // Auto-select library from query param (e.g. /libraries?libraryId=xxx)
+  const searchParams = useSearchParams();
+  const autoSelectLibraryId = searchParams.get("libraryId");
+  const autoSelectedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoSelectLibraryId && libraries.length > 0 && !autoSelectedRef.current) {
+      const target = libraries.find((lib) => lib._id === autoSelectLibraryId);
+      if (target) {
+        autoSelectedRef.current = true;
+        void loadBooksForLibrary(target, 1);
+      }
+    }
+  }, [autoSelectLibraryId, libraries]);
 
   // Filter libraries based on search
   useEffect(() => {
@@ -433,6 +450,9 @@ export default function LibrariesPage() {
                   </button>
                 </div>
               )}
+
+              {/* Library Reviews */}
+              <LibraryReviewSection library={selectedLibrary} />
             </div>
           )}
         </section>

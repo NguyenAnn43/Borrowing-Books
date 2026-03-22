@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Flag, Loader2, ShieldCheck, Star, Image as ImageIcon, Clock3, X } from "lucide-react";
+import { Flag, Loader2, ShieldCheck, Star, Image as ImageIcon, Clock3, X, Library } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
 import { reviewService } from "@/services/reviewService";
-import type { ILibrarianReviewDashboardItem, IReviewReport } from "@/types";
+import type { ILibrarianReviewDashboardItem, IReviewReport, IBookReview, ILibraryReview } from "@/types";
 
 const getReviewId = (report: IReviewReport): string => {
     if (typeof report.reviewId === "string") return report.reviewId;
@@ -83,8 +83,15 @@ function LibrarianReviewCard({
                         >
                             {item.book?.title || "Xem chi tiết sách"}
                         </Link>
+                    ) : item.library?._id ? (
+                        <Link
+                            href={`/libraries?libraryId=${item.library._id}`}
+                            className="text-sm font-semibold text-blue-300 hover:text-blue-200 hover:underline"
+                        >
+                            {item.library?.name || "Xem thư viện"}
+                        </Link>
                     ) : (
-                        <p className="text-sm font-semibold text-white">{item.book?.title || item.library?.name || "Review"}</p>
+                        <p className="text-sm font-semibold text-white">Review</p>
                     )}
                     <p className="text-xs text-slate-400 mt-0.5">{item.user.fullName || "Bạn đọc"} · {new Date(item.createdAt).toLocaleDateString("vi-VN")}</p>
                 </div>
@@ -95,8 +102,26 @@ function LibrarianReviewCard({
 
             {item.comment && <p className="mt-3 text-sm text-slate-300 line-clamp-3">{item.comment}</p>}
 
-            <div className="mt-3 flex items-center justify-between">
-                <span className="text-xs text-slate-400">{item.images.length > 0 ? `${item.images.length} ảnh đính kèm` : "Không có ảnh"}</span>
+            {item.images && item.images.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {item.images.slice(0, 3).map((img, idx) => (
+                        <div key={idx} className="relative aspect-square w-16 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img} alt="Review" className="h-full w-full object-cover" />
+                        </div>
+                    ))}
+                    {item.images.length > 3 && (
+                        <div className="flex aspect-square w-16 items-center justify-center rounded-lg border border-white/10 bg-slate-800 text-xs font-bold text-slate-400">
+                            +{item.images.length - 3}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-between">
+                <span className="text-xs text-slate-400">
+                    {item.images.length > 0 ? `${item.images.length} ảnh đính kèm` : "Không có ảnh"}
+                </span>
                 <button
                     type="button"
                     onClick={() => onReport(item)}
@@ -106,6 +131,49 @@ function LibrarianReviewCard({
                     {reporting ? "Đang gửi..." : "Báo cáo lên quản trị"}
                 </button>
             </div>
+        </article>
+    );
+}
+
+function UserReviewCard({ review, type }: { review: IBookReview | ILibraryReview; type: "book" | "library" }) {
+    const itemName = type === "book" ? (review as IBookReview).bookId?.title : (review as ILibraryReview).libraryId?.name;
+    const itemId = type === "book" ? (review as IBookReview).bookId?._id : (review as ILibraryReview).libraryId?._id;
+    const itemLink = type === "book" ? `/books/${itemId}` : `/libraries?libraryId=${itemId}`;
+
+    return (
+        <article className="rounded-xl border border-white/10 bg-slate-900/40 p-4 transition-colors hover:bg-slate-900/60">
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{type === "book" ? "Sách" : "Thư viện"}</p>
+                    <Link href={itemLink} className="text-sm font-semibold text-blue-300 hover:text-blue-200 hover:underline">
+                        {itemName || "Xem chi tiết"}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-slate-400">{new Date(review.createdAt).toLocaleDateString("vi-VN")}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-bold text-yellow-500">
+                        <Star className="h-3 w-3 fill-current" /> {review.stars}
+                    </span>
+                    {!review.isHidden ? (
+                        <span className="text-[10px] text-emerald-500 font-medium">Công khai</span>
+                    ) : (
+                        <span className="text-[10px] text-red-400 font-medium">Bị ẩn</span>
+                    )}
+                </div>
+            </div>
+
+            {review.comment && <p className="mt-3 text-sm text-slate-300 leading-relaxed">{review.comment}</p>}
+
+            {review.images && review.images.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {review.images.map((img, idx) => (
+                        <div key={idx} className="relative aspect-square w-12 overflow-hidden rounded-md border border-white/5 bg-black/20">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img} alt="Review attachment" className="h-full w-full object-cover" />
+                        </div>
+                    ))}
+                </div>
+            )}
         </article>
     );
 }
@@ -122,6 +190,11 @@ export default function ReviewsDashboardPage() {
         withImages: ILibrarianReviewDashboardItem[];
     }>({ latest: [], lowStar: [], withImages: [] });
 
+    const [myReviews, setMyReviews] = useState<{
+        bookReviews: IBookReview[];
+        libraryReviews: ILibraryReview[];
+    }>({ bookReviews: [], libraryReviews: [] });
+
     const [reports, setReports] = useState<IReviewReport[]>([]);
     const [reportingId, setReportingId] = useState<string | null>(null);
     const [moderatingId, setModeratingId] = useState<string | null>(null);
@@ -129,14 +202,23 @@ export default function ReviewsDashboardPage() {
     const [reportModalOpen, setReportModalOpen] = useState(false);
     const [reportReason, setReportReason] = useState("");
     const [reportTarget, setReportTarget] = useState<ILibrarianReviewDashboardItem | null>(null);
+    const [hideModalOpen, setHideModalOpen] = useState(false);
+    const [hideReason, setHideReason] = useState("");
+    const [hideTargetReport, setHideTargetReport] = useState<IReviewReport | null>(null);
 
     const isAdmin = user?.role === "admin";
     const isLibrarian = user?.role === "librarian";
+    const isUser = user?.role === "user";
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
+            if (isUser) {
+                const data = await reviewService.getMyReviews();
+                setMyReviews(data);
+            }
+
             if (isLibrarian) {
                 const data = await reviewService.getLibrarianReviewDashboard(12);
                 setLibrarianData(data);
@@ -156,7 +238,7 @@ export default function ReviewsDashboardPage() {
         } finally {
             setLoading(false);
         }
-    }, [isAdmin, isLibrarian, statusFilter]);
+    }, [isAdmin, isLibrarian, isUser, statusFilter]);
 
     useEffect(() => {
         void fetchData();
@@ -170,8 +252,8 @@ export default function ReviewsDashboardPage() {
 
     const submitReport = async () => {
         if (!reportTarget) return;
-        if (!reportReason.trim()) {
-            setError("Vui lòng nhập lý do báo cáo.");
+        if (reportReason.trim().length < 5) {
+            setError("Lý do report phải có ít nhất 5 ký tự.");
             return;
         }
 
@@ -196,8 +278,7 @@ export default function ReviewsDashboardPage() {
         }
     };
 
-    const handleModerate = async (report: IReviewReport, action: "keep" | "hide" | "delete") => {
-        const note = window.prompt("Ghi chú xử lý (tùy chọn):") || undefined;
+    const handleModerateKeep = async (report: IReviewReport) => {
         const reviewId = getReviewId(report);
         if (!reviewId) {
             setError("Không xác định được reviewId để xử lý.");
@@ -211,13 +292,56 @@ export default function ReviewsDashboardPage() {
             await reviewService.moderateReview({
                 reviewType: report.reviewType,
                 reviewId,
-                action,
-                note,
+                action: "keep",
             });
-            setSuccess(`Đã xử lý báo cáo: ${moderationActionLabel[action]}.`);
+            setSuccess("Đã mở lại review.");
             await fetchData();
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Không thể xử lý báo cáo.";
+            const message = err instanceof Error ? err.message : "Không thể xử lý report.";
+            setError(message);
+        } finally {
+            setModeratingId(null);
+        }
+    };
+
+    const openHideModal = (report: IReviewReport) => {
+        setHideTargetReport(report);
+        setHideReason("");
+        setHideModalOpen(true);
+        setError(null);
+        setSuccess(null);
+    };
+
+    const submitHideModeration = async () => {
+        if (!hideTargetReport) return;
+        if (hideReason.trim().length < 5) {
+            setError("Lý do ẩn review phải có ít nhất 5 ký tự.");
+            return;
+        }
+
+        const reviewId = getReviewId(hideTargetReport);
+        if (!reviewId) {
+            setError("Không xác định được reviewId để xử lý.");
+            return;
+        }
+
+        setModeratingId(hideTargetReport._id);
+        setError(null);
+        setSuccess(null);
+        try {
+            await reviewService.moderateReview({
+                reviewType: hideTargetReport.reviewType,
+                reviewId,
+                action: "hide",
+                note: hideReason.trim(),
+            });
+            setSuccess("Đã ẩn review và gửi thông báo vi phạm cho người dùng.");
+            setHideModalOpen(false);
+            setHideReason("");
+            setHideTargetReport(null);
+            await fetchData();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Không thể ẩn review.";
             setError(message);
         } finally {
             setModeratingId(null);
@@ -234,13 +358,19 @@ export default function ReviewsDashboardPage() {
     );
 
     return (
-        <RouteGuard allowedRoles={["admin", "librarian"]}>
+        <RouteGuard allowedRoles={["admin", "librarian", "user"]}>
             <div className="p-8 space-y-6">
                 <div className="flex items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Quản lý đánh giá</h1>
+                        <h1 className="text-2xl font-bold text-white">
+                            {isUser ? "Lịch sử review của tôi" : "Quản lý review"}
+                        </h1>
                         <p className="text-sm text-slate-400 mt-1">
-                            {isAdmin ? "Quản trị viên kiểm duyệt toàn hệ thống" : "Thủ thư theo dõi đánh giá thuộc thư viện quản lý"}
+                            {isUser 
+                                ? "Xem lại các đánh giá bạn đã thực hiện cho sách và thư viện" 
+                                : isAdmin 
+                                    ? "Admin moderation toàn hệ thống" 
+                                    : "Librarian dashboard review theo thư viện quản lý"}
                         </p>
                     </div>
                     {isAdmin && (
@@ -292,6 +422,42 @@ export default function ReviewsDashboardPage() {
                                 </section>
                             );
                         })}
+                    </div>
+                ) : isUser ? (
+                    <div className="space-y-8">
+                        <section>
+                            <h2 className="mb-4 text-lg font-semibold text-white flex items-center gap-2">
+                                <Star className="h-5 w-5 text-yellow-500" /> Đánh giá sách ({myReviews.bookReviews.length})
+                            </h2>
+                            {myReviews.bookReviews.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/20 p-12 text-center text-slate-500">
+                                    Bạn chưa thực hiện đánh giá sách nào.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {myReviews.bookReviews.map((rev) => (
+                                        <UserReviewCard key={rev._id} review={rev} type="book" />
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+
+                        <section>
+                            <h2 className="mb-4 text-lg font-semibold text-white flex items-center gap-2">
+                                <Library className="h-5 w-5 text-indigo-400" /> Đánh giá thư viện ({myReviews.libraryReviews.length})
+                            </h2>
+                            {myReviews.libraryReviews.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/20 p-12 text-center text-slate-500">
+                                    Bạn chưa thực hiện đánh giá thư viện nào.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {myReviews.libraryReviews.map((rev) => (
+                                        <UserReviewCard key={rev._id} review={rev} type="library" />
+                                    ))}
+                                </div>
+                            )}
+                        </section>
                     </div>
                 ) : (
                     <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
@@ -347,27 +513,19 @@ export default function ReviewsDashboardPage() {
                                                         <div className="inline-flex items-center gap-2">
                                                             <button
                                                                 type="button"
-                                                                onClick={() => void handleModerate(report, "keep")}
-                                                                disabled={moderatingId === report._id}
+                                                                onClick={() => void handleModerateKeep(report)}
+                                                                disabled={moderatingId === report._id || report.status === "resolved"}
                                                                 className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
                                                             >
                                                                 {moderationActionLabel.keep}
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => void handleModerate(report, "hide")}
-                                                                disabled={moderatingId === report._id}
+                                                                onClick={() => openHideModal(report)}
+                                                                disabled={moderatingId === report._id || report.status === "resolved"}
                                                                 className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"
                                                             >
                                                                 {moderationActionLabel.hide}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => void handleModerate(report, "delete")}
-                                                                disabled={moderatingId === report._id}
-                                                                className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-200 hover:bg-red-500/20 disabled:opacity-60"
-                                                            >
-                                                                {moderationActionLabel.delete}
                                                             </button>
                                                         </div>
                                                     </td>
@@ -407,6 +565,7 @@ export default function ReviewsDashboardPage() {
                                 className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
                                 placeholder="Nhập lý do báo cáo..."
                             />
+                            <p className="mt-1 text-xs text-slate-400">Tối thiểu 5 ký tự.</p>
 
                             <div className="mt-4 flex justify-end gap-2">
                                 <button
@@ -420,10 +579,61 @@ export default function ReviewsDashboardPage() {
                                 <button
                                     type="button"
                                     onClick={() => void submitReport()}
-                                    disabled={Boolean(reportingId)}
+                                    disabled={Boolean(reportingId) || reportReason.trim().length < 5}
                                     className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
                                 >
-                                    {reportingId ? "Đang gửi..." : "Gửi báo cáo"}
+                                    {reportingId ? "Đang gửi..." : "Gửi report"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {hideModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+                        <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h3 className="text-base font-semibold text-white">Ẩn review vi phạm</h3>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (moderatingId) return;
+                                        setHideModalOpen(false);
+                                    }}
+                                    className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <p className="mb-2 text-sm text-slate-300">
+                                Nhập lý do vi phạm để lưu log moderation và gửi thông báo cho người dùng.
+                            </p>
+                            <textarea
+                                rows={4}
+                                value={hideReason}
+                                onChange={(e) => setHideReason(e.target.value)}
+                                className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-500"
+                                placeholder="Ví dụ: Ngôn từ xúc phạm, công kích cá nhân, sai sự thật..."
+                            />
+                            <p className="mt-1 text-xs text-slate-400">Tối thiểu 5 ký tự.</p>
+
+                            <div className="mt-4 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setHideModalOpen(false)}
+                                    disabled={Boolean(moderatingId)}
+                                    className="rounded-lg border border-slate-600/50 bg-slate-700/40 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700/60 disabled:opacity-60"
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void submitHideModeration()}
+                                    disabled={Boolean(moderatingId) || hideReason.trim().length < 5}
+                                    className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"
+                                >
+                                    {moderatingId ? "Đang xử lý..." : "Xác nhận ẩn review"}
                                 </button>
                             </div>
                         </div>

@@ -1,6 +1,7 @@
 import { Router, IRouter } from 'express';
 import { reviewController } from '../controllers';
 import { optionalAuth, protect, authorize, validate } from '../middlewares';
+import { uploadReviewImages } from '../middlewares/upload';
 import {
     createBookReviewSchema,
     createLibraryReviewSchema,
@@ -93,6 +94,21 @@ router.get(
     authorize(ROLES.LIBRARIAN),
     validate(getLibrarianReviewDashboardSchema),
     reviewController.getLibrarianReviewDashboard
+);
+
+router.get(
+    '/my',
+    protect,
+    authorize(ROLES.USER),
+    reviewController.getMyReviews
+);
+
+router.post(
+    '/images',
+    protect,
+    authorize(ROLES.USER),
+    uploadReviewImages.array('images', 5),
+    reviewController.uploadImages
 );
 
 export default router;

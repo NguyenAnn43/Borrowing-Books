@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { asyncHandler } from '../utils';
+import { asyncHandler, AppError } from '../utils';
 import { AuthRequest } from '../types';
 import { reviewService } from '../services';
 import {
@@ -132,5 +132,33 @@ export const getLibrarianReviewDashboard = asyncHandler(async (req: AuthRequest,
     res.json({
         success: true,
         data: dashboard,
+    });
+});
+
+export const uploadImages = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const files = req.files as Express.Multer.File[];
+    
+    if (!files || files.length === 0) {
+        throw new AppError('No image files provided', 400, 'NO_FILES_PROVIDED');
+    }
+
+    const imageUrls = files.map(file => {
+        return `${req.protocol}://${req.get('host')}/uploads/reviews/${file.filename}`;
+    });
+
+    res.json({
+        success: true,
+        data: imageUrls,
+        message: 'Images uploaded successfully',
+    });
+});
+
+export const getMyReviews = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const userId = req.user!._id.toString();
+    const data = await reviewService.getMyReviews(userId);
+
+    res.json({
+        success: true,
+        data,
     });
 });

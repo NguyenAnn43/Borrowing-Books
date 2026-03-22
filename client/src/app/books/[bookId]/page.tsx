@@ -46,10 +46,15 @@ export default function BookDetailPage() {
     setReviewsLoading(true);
     setReviewsError("");
     try {
-      // Admin and Librarian can see hidden reviews
-      const includeHidden = user?.role === "admin" || user?.role === "librarian";
+      // Only admin can request hidden reviews in book detail.
+      const includeHidden = user?.role === "admin";
       const reviewsResult = await reviewService.getBookReviews(targetBookId, { page: 1, limit: 20, includeHidden });
-      setReviews(reviewsResult.reviews);
+
+      // User/Librarian should not see hidden reviews on this page.
+      const visibleReviews = user?.role === "admin"
+        ? reviewsResult.reviews
+        : reviewsResult.reviews.filter((item) => !item.isHidden);
+      setReviews(visibleReviews);
 
       if (user?._id) {
         const mine = reviewsResult.reviews.find((item) => item.userId?._id === user._id) || null;

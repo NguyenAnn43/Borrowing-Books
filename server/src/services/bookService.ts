@@ -60,14 +60,15 @@ export const getBooks = async (params: SearchBooksQuery & { userId?: string }): 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
 
-    const [books, total] = await Promise.all([
-        Book.find(query)
+    const docs = await Book.find(query)
             .populate('libraryId', 'name code')
             .skip(skip)
             .limit(actualLimit)
-            .sort({ createdAt: -1 }) as Promise<IBook[]>,
-        Book.countDocuments(query),
-    ]);
+            .sort({ createdAt: -1 });
+        
+    const total = await Book.countDocuments(query);
+
+    const books = docs.map(doc => doc.toJSON() as unknown as IBook);
 
     if (includeWishlist && userId) {
         const bookIds = books.map((book) => book._id.toString());
@@ -117,11 +118,13 @@ export const getBooks = async (params: SearchBooksQuery & { userId?: string }): 
  * Get book by ID
  */
 export const getBookById = async (id: string, userId?: string): Promise<IBook> => {
-    const book = await Book.findById(id).populate('libraryId', 'name code address') as IBook | null;
+    const doc = await Book.findById(id).populate('libraryId', 'name code address');
 
-    if (!book) {
+    if (!doc) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
     }
+    
+    const book = doc.toJSON() as unknown as IBook;
     if (userId) {
         const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, [book._id.toString()]);
         book.isWishlisted = wishlistedBookIds.has(book._id.toString());
@@ -156,11 +159,13 @@ export const getBookById = async (id: string, userId?: string): Promise<IBook> =
  * Priority matching by normalized ISBN. Fallback to title+author if ISBN absent.
  */
 export const getBookAlternatives = async (id: string, userId?: string): Promise<GetBookAlternativesResult> => {
-    const sourceBook = await Book.findById(id).populate('libraryId', 'name code address') as IBook | null;
+    const sourceDoc = await Book.findById(id).populate('libraryId', 'name code address');
 
-    if (!sourceBook) {
+    if (!sourceDoc) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
     }
+    
+    const sourceBook = sourceDoc.toJSON() as unknown as IBook;
 
     const matchedBy: 'isbn' | 'title-author' = sourceBook.isbnNormalized ? 'isbn' : 'title-author';
 
@@ -176,9 +181,11 @@ export const getBookAlternatives = async (id: string, userId?: string): Promise<
         alternativeQuery.author = sourceBook.author;
     }
 
-    const alternatives = await Book.find(alternativeQuery)
+    const alternativeDocs = await Book.find(alternativeQuery)
         .populate('libraryId', 'name code address')
-        .sort({ availableCopies: -1, createdAt: -1 }) as IBook[];
+        .sort({ availableCopies: -1, createdAt: -1 });
+        
+    const alternatives = alternativeDocs.map(doc => doc.toJSON() as unknown as IBook);
 
     if (userId && alternatives.length > 0) {
         const alternativeIds = alternatives.map((book) => book._id.toString());

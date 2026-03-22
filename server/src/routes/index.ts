@@ -12,6 +12,7 @@ import reviewRoutes from './reviewRoutes';
 import paymentRoutes from './paymentRoutes';
 import transitRoutes from './transitRoutes';
 import reportRoutes from './reportRoutes';
+import chatbotRoutes from './chatbotRoutes';
 
 const router: IRouter = Router();
 
@@ -28,6 +29,7 @@ router.use('/reviews', reviewRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/transits', transitRoutes);
 router.use('/reports', reportRoutes);
+router.use('/chatbot', chatbotRoutes);
 
 // Health check
 router.get('/health', (req: Request, res: Response) => {

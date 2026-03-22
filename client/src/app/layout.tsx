@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import Chatbot from "@/components/Chatbot";
 
 export const metadata: Metadata = {
   title: {
@@ -27,6 +28,7 @@ export default function RootLayout({
     <html lang="vi" className="dark" data-theme="dark" suppressHydrationWarning>
       <body className="antialiased">
         <Providers>{children}</Providers>
+        <Chatbot />
       </body>
     </html>
   );

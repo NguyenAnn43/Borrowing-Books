@@ -21,6 +21,7 @@ import {
     UpdateBookReviewInput,
     UpdateLibraryReviewInput,
 } from '../validators';
+import * as notificationService from './notificationService';
 
 type ReviewType = 'book' | 'library';
 type ReviewDocument = IBookReview | ILibraryReview;
@@ -183,9 +184,21 @@ export const getBookReviews = async (
         } else if (isLibrarian && requestingUser?.libraryId) {
             // Librarian only sees hidden reviews for their own library's books
             query.libraryId = requestingUser.libraryId;
+        } else if (requestingUser && requestingUser.role === ROLES.USER) {
+            // Regular user can only see their own hidden reviews.
+            query.$or = [
+                { isHidden: false },
+                { userId: requestingUser._id, isHidden: true },
+            ];
         } else {
             query.isHidden = false;
         }
+    } else if (requestingUser && requestingUser.role === ROLES.USER) {
+        // Even without includeHidden, return requester hidden reviews so UI can lock re-review flow.
+        query.$or = [
+            { isHidden: false },
+            { userId: requestingUser._id, isHidden: true },
+        ];
     } else {
         query.isHidden = false;
     }
@@ -205,6 +218,19 @@ export const createBookReview = async (user: IUser, data: CreateBookReviewInput)
     const book = await Book.findById(data.bookId);
     if (!book) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    const hasHiddenViolationReview = await BookReview.exists({
+        userId: user._id,
+        bookId: data.bookId,
+        isHidden: true,
+    });
+    if (hasHiddenViolationReview) {
+        throw new AppError(
+            'Your previous review for this book violated standards and was hidden. You cannot review this book again.',
+            403,
+            'REVIEW_BLOCKED_DUE_TO_VIOLATION'
+        );
     }
 
     await ensureBorrowedBook(user._id.toString(), data.bookId);
@@ -243,6 +269,14 @@ export const updateBookReview = async (
         throw new AppError('You can only edit your own review', 403, 'FORBIDDEN');
     }
 
+    if (review.isHidden) {
+        throw new AppError(
+            'This review was hidden for policy violation and cannot be edited',
+            403,
+            'REVIEW_HIDDEN_LOCKED'
+        );
+    }
+
     if (data.stars !== undefined) review.stars = data.stars;
     if (data.comment !== undefined) review.comment = data.comment;
     if (data.images !== undefined) review.images = data.images;
@@ -262,6 +296,14 @@ export const deleteBookReview = async (reviewId: string, user: IUser): Promise<v
     // Admin can delete any review; regular users can only delete their own
     if (user.role !== ROLES.ADMIN && toId(review.userId) !== user._id.toString()) {
         throw new AppError('You can only delete your own review', 403, 'FORBIDDEN');
+    }
+
+    if (user.role !== ROLES.ADMIN && review.isHidden) {
+        throw new AppError(
+            'Hidden review cannot be deleted because it is locked by moderation policy',
+            403,
+            'REVIEW_HIDDEN_LOCKED'
+        );
     }
 
     await BookReview.deleteOne({ _id: reviewId });
@@ -288,9 +330,21 @@ export const getLibraryReviews = async (
             // Admin sees all — no isHidden filter
         } else if (isLibrarian && requestingUser?.libraryId?.toString() === libraryId) {
             // Librarian viewing their own library — allow seeing hidden reviews
+        } else if (requestingUser && requestingUser.role === ROLES.USER) {
+            // Regular user can only see their own hidden reviews.
+            query.$or = [
+                { isHidden: false },
+                { userId: requestingUser._id, isHidden: true },
+            ];
         } else {
             query.isHidden = false;
         }
+    } else if (requestingUser && requestingUser.role === ROLES.USER) {
+        // Even without includeHidden, return requester hidden reviews so UI can lock re-review flow.
+        query.$or = [
+            { isHidden: false },
+            { userId: requestingUser._id, isHidden: true },
+        ];
     } else {
         query.isHidden = false;
     }
@@ -310,6 +364,19 @@ export const createLibraryReview = async (user: IUser, data: CreateLibraryReview
     const library = await Library.findById(data.libraryId);
     if (!library) {
         throw new AppError('Library not found', 404, 'LIBRARY_NOT_FOUND');
+    }
+
+    const hasHiddenViolationReview = await LibraryReview.exists({
+        userId: user._id,
+        libraryId: data.libraryId,
+        isHidden: true,
+    });
+    if (hasHiddenViolationReview) {
+        throw new AppError(
+            'Your previous review for this library violated standards and was hidden. You cannot review this library again.',
+            403,
+            'REVIEW_BLOCKED_DUE_TO_VIOLATION'
+        );
     }
 
     await ensureBorrowedFromLibrary(user._id.toString(), data.libraryId);
@@ -347,6 +414,14 @@ export const updateLibraryReview = async (
         throw new AppError('You can only edit your own review', 403, 'FORBIDDEN');
     }
 
+    if (review.isHidden) {
+        throw new AppError(
+            'This review was hidden for policy violation and cannot be edited',
+            403,
+            'REVIEW_HIDDEN_LOCKED'
+        );
+    }
+
     if (data.stars !== undefined) review.stars = data.stars;
     if (data.comment !== undefined) review.comment = data.comment;
     if (data.images !== undefined) review.images = data.images;
@@ -368,6 +443,14 @@ export const deleteLibraryReview = async (reviewId: string, user: IUser): Promis
         throw new AppError('You can only delete your own review', 403, 'FORBIDDEN');
     }
 
+    if (user.role !== ROLES.ADMIN && review.isHidden) {
+        throw new AppError(
+            'Hidden review cannot be deleted because it is locked by moderation policy',
+            403,
+            'REVIEW_HIDDEN_LOCKED'
+        );
+    }
+
     await LibraryReview.deleteOne({ _id: reviewId });
 };
 
@@ -383,22 +466,37 @@ export const createReviewReport = async (reporter: IUser, data: CreateReviewRepo
         throw new AppError('You cannot report your own review', 400, 'INVALID_REPORT_TARGET');
     }
 
-    try {
-        const report = await ReviewReport.create({
-            reviewType: data.reviewType,
-            reviewId: data.reviewId,
-            reviewModel,
-            reporterId: reporter._id,
-            reason: data.reason,
-        }) as IReviewReport;
+    const existingReport = await ReviewReport.findOne({
+        reviewType: data.reviewType,
+        reviewId: data.reviewId,
+        reporterId: reporter._id,
+    }) as IReviewReport | null;
 
-        return report;
-    } catch (error) {
-        if (error instanceof Error && 'code' in error && (error as { code?: number }).code === 11000) {
+    if (existingReport) {
+        if (existingReport.status === REVIEW_REPORT_STATUS.PENDING) {
             throw new AppError('You already reported this review', 409, 'REVIEW_REPORT_EXISTS');
         }
-        throw error;
+
+        existingReport.reason = data.reason;
+        existingReport.status = REVIEW_REPORT_STATUS.PENDING;
+        existingReport.adminAction = undefined;
+        existingReport.adminNote = undefined;
+        existingReport.resolvedBy = undefined;
+        existingReport.resolvedAt = undefined;
+
+        await existingReport.save();
+        return existingReport;
     }
+
+    const report = await ReviewReport.create({
+        reviewType: data.reviewType,
+        reviewId: data.reviewId,
+        reviewModel,
+        reporterId: reporter._id,
+        reason: data.reason,
+    }) as IReviewReport;
+
+    return report;
 };
 
 export const getReviewReports = async (params: GetReviewReportsQuery): Promise<ReviewReportListResult> => {
@@ -427,35 +525,44 @@ export const getReviewReports = async (params: GetReviewReportsQuery): Promise<R
 };
 
 export const moderateReview = async (admin: IUser, data: ModerateReviewInput): Promise<void> => {
-    const { findById, findByIdAndDelete } = resolveReviewModel(data.reviewType);
+    const { findById } = resolveReviewModel(data.reviewType);
     const now = new Date();
 
-    if (data.action === REVIEW_ADMIN_ACTION.DELETE) {
-        const deletion = await findByIdAndDelete(data.reviewId);
-        if (!deletion) {
-            throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
-        }
-    } else {
-        const review = await findById(data.reviewId);
-        if (!review) {
-            throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
-        }
+    const review = await findById(data.reviewId);
+    if (!review) {
+        throw new AppError('Review not found', 404, 'REVIEW_NOT_FOUND');
+    }
 
-        if (data.action === REVIEW_ADMIN_ACTION.HIDE) {
-            review.isHidden = true;
-            review.hiddenBy = admin._id;
-            review.hiddenAt = now;
-            review.hiddenReason = data.note || 'Hidden by admin moderation';
-        }
+    if (data.action === REVIEW_ADMIN_ACTION.HIDE) {
+        review.isHidden = true;
+        review.hiddenBy = admin._id;
+        review.hiddenAt = now;
+        review.hiddenReason = data.note || 'Vi phạm tiêu chuẩn cộng đồng';
+    }
 
-        if (data.action === REVIEW_ADMIN_ACTION.KEEP) {
-            review.isHidden = false;
-            review.hiddenBy = undefined;
-            review.hiddenAt = undefined;
-            review.hiddenReason = undefined;
-        }
+    if (data.action === REVIEW_ADMIN_ACTION.KEEP) {
+        review.isHidden = false;
+        review.hiddenBy = undefined;
+        review.hiddenAt = undefined;
+        review.hiddenReason = undefined;
+    }
 
-        await review.save();
+    await review.save();
+
+    if (data.action === REVIEW_ADMIN_ACTION.HIDE) {
+        const targetName = data.reviewType === 'book' ? 'sách' : 'thư viện';
+        await notificationService.create({
+            userId: toId(review.userId),
+            title: 'Review bị ẩn do vi phạm tiêu chuẩn',
+            message: `Review ${targetName} của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.${data.note ? ` Lý do: ${data.note}` : ''} Bạn không thể review lại nội dung này.`,
+            type: 'system',
+            metadata: {
+                kind: 'review_hidden_violation',
+                reviewType: data.reviewType,
+                reviewId: data.reviewId,
+                action: data.action,
+            },
+        });
     }
 
     await ReviewReport.updateMany(
@@ -526,4 +633,22 @@ export const getLibrarianReviewDashboard = async (
         lowStar,
         withImages,
     };
+};
+
+/**
+ * Get all reviews made by a specific user (both book and library reviews).
+ */
+export const getMyReviews = async (userId: string) => {
+    const [bookReviews, libraryReviews] = await Promise.all([
+        BookReview.find({ userId: new Types.ObjectId(userId) })
+            .populate('bookId', 'title author coverImage')
+            .sort({ createdAt: -1 })
+            .lean() as unknown as IBookReview[],
+        LibraryReview.find({ userId: new Types.ObjectId(userId) })
+            .populate('libraryId', 'name code')
+            .sort({ createdAt: -1 })
+            .lean() as unknown as ILibraryReview[],
+    ]);
+
+    return { bookReviews, libraryReviews };
 };
