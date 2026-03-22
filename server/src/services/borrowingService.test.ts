@@ -19,6 +19,7 @@ const {
     mockIncrement,
     mockBookFindByIdAndUpdate,
     mockUserFindByIdAndUpdate,
+    mockPaymentCreate,
 } = vi.hoisted(() => ({
     mockBorrowingFindById: vi.fn(),
     mockBorrowingFind: vi.fn(),
@@ -41,6 +42,7 @@ const {
     mockIncrement: vi.fn(),
     mockBookFindByIdAndUpdate: vi.fn(),
     mockUserFindByIdAndUpdate: vi.fn(),
+    mockPaymentCreate: vi.fn(),
 }));
 
 vi.mock('mongoose', async (importOriginal) => {
@@ -73,6 +75,9 @@ vi.mock('../models', () => ({
         find: mockUserFind,
         findById: mockUserFindById,
         findByIdAndUpdate: mockUserFindByIdAndUpdate,
+    },
+    Payment: {
+        create: mockPaymentCreate,
     },
 }));
 
@@ -274,6 +279,25 @@ describe('borrowingService.payFine', () => {
 
         await borrowingService.payFine(borrowing._id!.toString());
         expect(borrowing.finePaid).toBe(true);
+    });
+
+    it('moves overdue to returned after fine is paid when book was already returned', async () => {
+        const userId = new Types.ObjectId();
+        const borrowing = makeBorrowing({
+            userId,
+            isFined: true,
+            finePaid: false,
+            fineAmount: 50000,
+            status: BORROWING_STATUS.OVERDUE,
+            actualReturnDate: new Date(),
+        });
+        mockBorrowingFindById.mockResolvedValue(borrowing);
+        mockBorrowingSave.mockResolvedValue(borrowing);
+
+        await borrowingService.payFine(borrowing._id!.toString());
+
+        expect(borrowing.finePaid).toBe(true);
+        expect(borrowing.status).toBe(BORROWING_STATUS.RETURNED);
     });
 
     it('throws NO_FINE when isFined is false', async () => {

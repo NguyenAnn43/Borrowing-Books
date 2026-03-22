@@ -808,6 +808,11 @@ export const markFineAsPaidByBorrowingId = async (
     }
 
     borrowing.finePaid = true;
+    // If the book was already physically returned (actualReturnDate is set),
+    // paying the overdue fine should finalize the lifecycle as RETURNED.
+    if (borrowing.status === BORROWING_STATUS.OVERDUE && borrowing.actualReturnDate) {
+        borrowing.status = BORROWING_STATUS.RETURNED;
+    }
     await borrowing.save();
 
     const unpaidFines = await Borrowing.countDocuments({
