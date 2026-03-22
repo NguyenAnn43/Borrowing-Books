@@ -249,6 +249,7 @@ export default function BorrowingsPage() {
                     const result = await borrowingService.getMyBorrowings({
                         page: page,
                         limit: limit,
+                        q: debouncedTerm || undefined,
                         status: selectedStatus || undefined,
                     });
                     setBorrowings(result.borrowings);

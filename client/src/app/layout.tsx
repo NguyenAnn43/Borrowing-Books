@@ -24,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
-      <body className="antialiased" suppressHydrationWarning>
+    <html lang="vi" className="dark" data-theme="dark" suppressHydrationWarning>
+      <body className="antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

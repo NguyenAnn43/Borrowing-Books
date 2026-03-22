@@ -190,9 +190,9 @@ export const lookupCrossLibraryReturnCandidates = async (
  */
 export const getMyBorrowings = async (
     userId: string,
-    params: { page?: number; limit?: number; status?: string; finePaid?: string | boolean } = {}
+    params: { page?: number; limit?: number; status?: string; finePaid?: string | boolean; q?: string } = {}
 ): Promise<GetBorrowingsResult> => {
-    const { page = 1, limit = 10, status, finePaid } = params;
+    const { page = 1, limit = 10, status, finePaid, q } = params;
     const query: Record<string, unknown> = { userId };
     if (status) query.status = status;
     if (typeof finePaid === 'boolean') {
@@ -201,6 +201,36 @@ export const getMyBorrowings = async (
         query.finePaid = true;
     } else if (finePaid === 'false') {
         query.finePaid = false;
+    }
+
+    if (q) {
+        const normalizedQ = q.trim();
+        if (normalizedQ) {
+            const isObjectIdQuery = Types.ObjectId.isValid(normalizedQ);
+            const safeRegex = { $regex: escapeRegex(normalizedQ), $options: 'i' };
+
+            const matchingBooks = await Book.find({
+                $or: [{ title: safeRegex }, { author: safeRegex }, { isbn: safeRegex }],
+            }).select('_id');
+
+            const orConditions: Record<string, unknown>[] = [];
+
+            if (isObjectIdQuery) {
+                const objectId = new Types.ObjectId(normalizedQ);
+                orConditions.push({ _id: objectId });
+                orConditions.push({ bookId: objectId });
+            }
+
+            if (matchingBooks.length > 0) {
+                orConditions.push({ bookId: { $in: matchingBooks.map((book) => book._id) } });
+            }
+
+            if (orConditions.length === 0) {
+                return { borrowings: [], pagination: formatPagination(page, limit, 0) };
+            }
+
+            query.$or = orConditions;
+        }
     }
 
     const [borrowings, total] = await Promise.all([
