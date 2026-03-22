@@ -16,9 +16,34 @@ export interface GetBooksResponse {
     pagination: IPagination;
 }
 
+export interface GetBookAlternativesResponse {
+    sourceBook: IBook;
+    alternatives: IBook[];
+    matchedBy: "isbn" | "title-author";
+}
+
+export interface BookMutationPayload {
+    isbn?: string;
+    title?: string;
+    author?: string;
+    publisher?: string;
+    publishYear?: number;
+    category?: string;
+    description?: string;
+    coverImage?: string;
+    language?: string;
+    pageCount?: number;
+    tags?: string[];
+    location?: string;
+    libraryId?: string;
+    totalCopies?: number;
+    availableCopies?: number;
+    status?: "available" | "unavailable";
+}
+
 export const bookService = {
     /**
-     * Get all books with filters
+     * Get all books with filters and pagination
      */
     getBooks: async (params: GetBooksParams = {}): Promise<GetBooksResponse> => {
         const response = await api.get<ApiResponse<IBook[]>>("/books", { params });
@@ -37,9 +62,17 @@ export const bookService = {
     },
 
     /**
+     * Get alternative libraries carrying the same title
+     */
+    getBookAlternatives: async (id: string): Promise<GetBookAlternativesResponse> => {
+        const response = await api.get<ApiResponse<GetBookAlternativesResponse>>(`/books/${id}/alternatives`);
+        return response.data.data;
+    },
+
+    /**
      * Create new book
      */
-    createBook: async (data: Partial<IBook>): Promise<IBook> => {
+    createBook: async (data: BookMutationPayload): Promise<IBook> => {
         const response = await api.post<ApiResponse<IBook>>("/books", data);
         return response.data.data;
     },
@@ -47,7 +80,7 @@ export const bookService = {
     /**
      * Update book
      */
-    updateBook: async (id: string, data: Partial<IBook>): Promise<IBook> => {
+    updateBook: async (id: string, data: BookMutationPayload): Promise<IBook> => {
         const response = await api.put<ApiResponse<IBook>>(`/books/${id}`, data);
         return response.data.data;
     },

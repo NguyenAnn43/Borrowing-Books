@@ -50,6 +50,7 @@ export interface IBook {
     totalCopies: number;
     availableCopies: number;
     wishlistCount?: number;
+    averageRating?: number;
     isWishlisted?: boolean;
     status: "available" | "unavailable";
     createdAt: string;
@@ -75,11 +76,15 @@ export interface IBorrowing {
     libraryId: Pick<ILibrary, "_id" | "name" | "code">;
     borrowDate: string;
     dueDate: string;
-    returnDate?: string;
     actualReturnDate?: string;
-    status: "pending" | "borrowed" | "returned" | "overdue";
+    returnHandledLibraryId?: Pick<ILibrary, "_id" | "name" | "code">;
+    transitCompletedAt?: string;
+    status: "pending" | "borrowed" | "returned" | "overdue" | "return_transit" | "cancelled" | "lost" | "damaged";
     fineAmount: number;
     isFined: boolean;
+    finePaid?: boolean;
+    renewalCount?: number;
+    maxRenewals?: number;
     notes?: string;
     overdueDays?: number;
     createdAt: string;
@@ -99,6 +104,39 @@ export interface IReservation {
     updatedAt: string;
 }
 
+export interface ITransitRequest {
+    _id: string;
+    bookId: Pick<IBook, "_id" | "title" | "author" | "coverImage"> & {
+        isbn?: string;
+        availableCopies?: number;
+        totalCopies?: number;
+    };
+    sourceLibraryId: Pick<ILibrary, "_id" | "name" | "code">;
+    targetLibraryId: Pick<ILibrary, "_id" | "name" | "code">;
+    targetBookId?: Pick<IBook, "_id" | "title" | "author">;
+    quantity: number;
+    requestedBy: Pick<IUser, "_id" | "fullName" | "email">;
+    requestedForUserId?: Pick<IUser, "_id" | "fullName" | "email">;
+    reviewedBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    dispatchedBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    receivedBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    cancelledBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    status: "pending" | "approved" | "rejected" | "in_transit" | "completed" | "cancelled";
+    note?: string;
+    decisionNote?: string;
+    dispatchNote?: string;
+    receiveNote?: string;
+    cancelReason?: string;
+    requestedAt: string;
+    approvedAt?: string;
+    rejectedAt?: string;
+    dispatchedAt?: string;
+    receivedAt?: string;
+    cancelledAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 // Notification types
 export interface INotification {
     _id: string;
@@ -110,6 +148,183 @@ export interface INotification {
     createdAt: string;
 }
 
+// Review types
+export interface IReviewUserSnapshot {
+    _id: string;
+    fullName?: string;
+    avatar?: string;
+}
+
+export interface IBookReview {
+    _id: string;
+    userId: IReviewUserSnapshot;
+    bookId: Pick<IBook, '_id' | 'title' | 'author' | 'coverImage'>;
+    libraryId: Pick<ILibrary, '_id' | 'name' | 'code'>;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    hiddenReason?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ILibraryReview {
+    _id: string;
+    userId: IReviewUserSnapshot;
+    libraryId: Pick<ILibrary, '_id' | 'name' | 'code'>;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    hiddenReason?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface IReviewReport {
+    _id: string;
+    reviewType: 'book' | 'library';
+    reviewId: IBookReview | ILibraryReview | string;
+    reporterId: Pick<IUser, '_id' | 'fullName' | 'email' | 'role'>;
+    reason: string;
+    status: 'pending' | 'resolved';
+    adminAction?: 'keep' | 'hide' | 'delete';
+    adminNote?: string;
+    resolvedBy?: Pick<IUser, '_id' | 'fullName' | 'role'>;
+    resolvedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ILibrarianReviewDashboardItem {
+    reviewType: 'book' | 'library';
+    reviewId: string;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    createdAt: string;
+    user: {
+        _id: string;
+        fullName?: string;
+        avatar?: string;
+    };
+    library: {
+        _id: string;
+        name?: string;
+        code?: string;
+    };
+    book?: {
+        _id: string;
+        title?: string;
+        author?: string;
+        coverImage?: string;
+    };
+}
+
+export interface ILibrarianReviewDashboard {
+    latest: ILibrarianReviewDashboardItem[];
+    lowStar: ILibrarianReviewDashboardItem[];
+    withImages: ILibrarianReviewDashboardItem[];
+}
+
+export interface IPayment {
+    _id: string;
+    userId?: Pick<IUser, "_id" | "fullName" | "email">;
+    borrowingId?: {
+        _id: string;
+        bookId?: Pick<IBook, "_id" | "title" | "author">;
+        dueDate?: string;
+        fineAmount?: number;
+        status?: IBorrowing["status"];
+        finePaid?: boolean;
+    };
+    provider: "vnpay" | "cash";
+    status: "pending" | "success" | "failed";
+    amount: number;
+    txnRef: string;
+    vnpTxnNo?: string;
+    vnpResponseCode?: string;
+    paidAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface IMonthlyFineRevenueItem {
+    year: number;
+    month: number;
+    label: string;
+    totalRevenue: number;
+    successfulPayments: number;
+}
+
+export interface IMonthlyFineIncurredItem {
+    year: number;
+    month: number;
+    label: string;
+    totalFineIncurred: number;
+    finedBorrowings: number;
+}
+
+export interface ITopBorrowedBookItem {
+    bookId: string;
+    title: string;
+    author: string;
+    coverImage: string | null;
+    totalBorrowings: number;
+    uniqueBorrowers: number;
+}
+
+export interface ILateReturnRateReport {
+    totalConsidered: number;
+    lateOrOverdueCount: number;
+    onTimeCount: number;
+    lateReturnRate: number;
+}
+
+export interface IUserActivitySummary {
+    totalUsersWithBorrowings: number;
+    activeUsers: number;
+    violators: number;
+    activeRate: number;
+    violationRate: number;
+    overlapCount: number;
+    activityThreshold: number;
+}
+
+export interface IUserActivityMember {
+    userId: string;
+    fullName: string;
+    email: string;
+    totalBorrowings: number;
+    violationCount: number;
+    isActive: boolean;
+    isViolator: boolean;
+}
+
+export interface IUserActivityReport {
+    summary: IUserActivitySummary;
+    topActiveUsers: IUserActivityMember[];
+    topViolators: IUserActivityMember[];
+}
+
+export interface IDashboardReport {
+    fineRevenueByMonth: IMonthlyFineRevenueItem[];
+    fineIncurredByMonth: IMonthlyFineIncurredItem[];
+    topBorrowedBooks: ITopBorrowedBookItem[];
+    lateReturnRate: ILateReturnRateReport;
+    userActivity: IUserActivityReport;
+}
+
+export interface IReportQuery {
+    from?: string;
+    to?: string;
+    topLimit?: number;
+    months?: number;
+    activityThreshold?: number;
+}
+
 // Auth types
 export interface ILoginRequest {
     email: string;
@@ -118,9 +333,25 @@ export interface ILoginRequest {
 
 export interface IRegisterRequest {
     email: string;
+    emailVerificationToken: string;
     password: string;
     fullName: string;
     phone?: string;
+}
+
+export interface IRequestRegisterOtpResponse {
+    expiresInSeconds: number;
+}
+
+export interface IVerifyRegisterOtpResponse {
+    verificationToken: string;
+    expiresInSeconds: number;
+}
+
+export interface IForgotPasswordResponse {
+    accepted: boolean;
+    previewResetUrl?: string;
+    expiresInSeconds?: number;
 }
 
 export interface IAuthResponse {

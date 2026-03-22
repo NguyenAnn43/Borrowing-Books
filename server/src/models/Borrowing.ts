@@ -28,14 +28,16 @@ const borrowingSchema = new Schema<IBorrowing>(
             type: Date,
             required: [true, 'Due date is required'],
         },
-        /**
-         * @deprecated Use actualReturnDate. Mirrored on save for backwards compat.
-         */
-        returnDate: {
+        actualReturnDate: {
             type: Date,
             default: null,
         },
-        actualReturnDate: {
+        returnHandledLibraryId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Library',
+            default: null,
+        },
+        transitCompletedAt: {
             type: Date,
             default: null,
         },
@@ -81,21 +83,15 @@ const borrowingSchema = new Schema<IBorrowing>(
 borrowingSchema.index({ userId: 1, status: 1 });
 borrowingSchema.index({ libraryId: 1, status: 1 });
 borrowingSchema.index({ dueDate: 1, status: 1 });
+borrowingSchema.index({ returnHandledLibraryId: 1, status: 1 });
 
 // Auto-populate references
 borrowingSchema.pre(/^find/, function (next) {
     (this as mongoose.Query<unknown, IBorrowing>)
         .populate('userId', 'fullName email')
         .populate('bookId', 'title author coverImage')
-        .populate('libraryId', 'name code');
-    next();
-});
-
-// Mirror returnDate from actualReturnDate for backwards compat
-borrowingSchema.pre('save', function (next) {
-    if (this.actualReturnDate) {
-        this.returnDate = this.actualReturnDate;
-    }
+        .populate('libraryId', 'name code')
+        .populate('returnHandledLibraryId', 'name code');
     next();
 });
 
@@ -114,8 +110,19 @@ borrowingSchema.methods.checkOverdue = function (): void {
 
 // Virtual for overdue days
 borrowingSchema.virtual('overdueDays').get(function () {
-    if (this.status !== BORROWING_STATUS.OVERDUE && this.status !== BORROWING_STATUS.BORROWED) {
+    if (
+        this.status !== BORROWING_STATUS.OVERDUE &&
+        this.status !== BORROWING_STATUS.BORROWED &&
+        this.status !== BORROWING_STATUS.RETURN_TRANSIT
+    ) {
         return 0;
+    }
+    if (this.actualReturnDate) {
+        const actualReturn = new Date(this.actualReturnDate);
+        const due = new Date(this.dueDate);
+        if (actualReturn <= due) return 0;
+        const diffTime = Math.abs(actualReturn.getTime() - due.getTime());
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     }
     return calculateOverdueDays(this.dueDate);
 });

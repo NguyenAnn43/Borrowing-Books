@@ -18,20 +18,39 @@ function ensureDbName(uri) {
   }
 }
 
-const libraryPayload = {
-  name: 'Thu vien Demo Wishlist',
-  code: 'WLST01',
-  address: '123 Seed Street, Ho Chi Minh City',
-  phone: '0900000000',
-  email: 'wishlist-seed@library.local',
-  status: 'active',
-  workingHours: { open: '08:00', close: '17:00' },
-  description: 'Library duoc tao tu script seed books',
-};
+function normalizeIsbn(isbn) {
+  if (!isbn || typeof isbn !== 'string') return null;
+  const normalized = isbn.trim().toUpperCase().replace(/-/g, '').replace(/\s+/g, '');
+  return normalized || null;
+}
+
+const librariesPayload = [
+  {
+    name: 'Thu vien Demo Wishlist',
+    code: 'WLST01',
+    address: '123 Seed Street, Ho Chi Minh City',
+    phone: '0900000000',
+    email: 'wishlist-seed@library.local',
+    status: 'active',
+    workingHours: { open: '08:00', close: '17:00' },
+    description: 'Library chinh cho du lieu demo',
+  },
+  {
+    name: 'Thu vien Demo Branch',
+    code: 'WLST02',
+    address: '456 Branch Street, Ho Chi Minh City',
+    phone: '0900000001',
+    email: 'wishlist-seed-branch@library.local',
+    status: 'active',
+    workingHours: { open: '08:00', close: '17:00' },
+    description: 'Library chi nhanh cho du lieu lien thu vien',
+  },
+];
 
 const booksPayload = [
   {
-    isbn: '9786041234501',
+    libraryCode: 'WLST01',
+    isbn: '978-604-123-4501',
     title: 'Clean Code',
     author: 'Robert C. Martin',
     publisher: 'Prentice Hall',
@@ -47,6 +66,24 @@ const booksPayload = [
     status: 'available',
   },
   {
+    libraryCode: 'WLST02',
+    isbn: '9786041234501',
+    title: 'Clean Code',
+    author: 'Robert C. Martin',
+    publisher: 'Prentice Hall',
+    publishYear: 2008,
+    category: 'Software Engineering',
+    description: 'Cung ISBN o thu vien khac de test alternatives.',
+    language: 'en',
+    pageCount: 464,
+    tags: ['seed-book', 'clean-code', 'software', 'cross-library'],
+    location: 'B1-01',
+    totalCopies: 3,
+    availableCopies: 3,
+    status: 'available',
+  },
+  {
+    libraryCode: 'WLST01',
     isbn: '9786041234502',
     title: 'Refactoring',
     author: 'Martin Fowler',
@@ -63,38 +100,24 @@ const booksPayload = [
     status: 'available',
   },
   {
-    isbn: '9786041234503',
-    title: 'The Pragmatic Programmer',
-    author: 'Andrew Hunt, David Thomas',
-    publisher: 'Addison-Wesley',
-    publishYear: 2019,
-    category: 'Programming',
-    description: 'Goi y hay de bo vao wishlist.',
-    language: 'en',
-    pageCount: 352,
-    tags: ['seed-book', 'pragmatic'],
-    location: 'A1-03',
-    totalCopies: 6,
-    availableCopies: 6,
-    status: 'available',
-  },
-  {
-    isbn: '9786041234504',
-    title: 'Designing Data-Intensive Applications',
-    author: 'Martin Kleppmann',
-    publisher: "O'Reilly Media",
-    publishYear: 2017,
+    libraryCode: 'WLST02',
+    isbn: '9786041234506',
+    title: 'System Design Interview',
+    author: 'Alex Xu',
+    publisher: 'ByteByteGo',
+    publishYear: 2020,
     category: 'System Design',
-    description: 'Sach ve he thong du lieu cho wishlist.',
+    description: 'Sach phu hop de test wishlist + search.',
     language: 'en',
-    pageCount: 616,
-    tags: ['seed-book', 'data', 'system-design'],
-    location: 'A1-04',
-    totalCopies: 3,
-    availableCopies: 3,
+    pageCount: 322,
+    tags: ['seed-book', 'interview', 'system-design'],
+    location: 'B1-06',
+    totalCopies: 5,
+    availableCopies: 5,
     status: 'available',
   },
   {
+    libraryCode: 'WLST01',
     isbn: '9786041234505',
     title: 'Grokking Algorithms',
     author: 'Aditya Bhargava',
@@ -108,22 +131,6 @@ const booksPayload = [
     location: 'A1-05',
     totalCopies: 7,
     availableCopies: 7,
-    status: 'available',
-  },
-  {
-    isbn: '9786041234506',
-    title: 'System Design Interview',
-    author: 'Alex Xu',
-    publisher: 'ByteByteGo',
-    publishYear: 2020,
-    category: 'System Design',
-    description: 'Sach phu hop de test wishlist + search.',
-    language: 'en',
-    pageCount: 322,
-    tags: ['seed-book', 'interview', 'system-design'],
-    location: 'A1-06',
-    totalCopies: 5,
-    availableCopies: 5,
     status: 'available',
   },
 ];
@@ -141,33 +148,49 @@ async function run() {
   const libraries = db.collection('libraries');
   const books = db.collection('books');
 
-  await libraries.updateOne(
-    { code: libraryPayload.code },
-    {
-      $set: {
-        ...libraryPayload,
-        updatedAt: new Date(),
+  for (const library of librariesPayload) {
+    await libraries.updateOne(
+      { code: library.code },
+      {
+        $set: {
+          ...library,
+          updatedAt: new Date(),
+        },
+        $setOnInsert: {
+          createdAt: new Date(),
+        },
       },
-      $setOnInsert: {
-        createdAt: new Date(),
-      },
-    },
-    { upsert: true }
-  );
-
-  const library = await libraries.findOne({ code: libraryPayload.code }, { projection: { _id: 1 } });
-  if (!library || !library._id) {
-    throw new Error('Khong tao/lay duoc library seed WLST01');
+      { upsert: true }
+    );
   }
+
+  const libraryDocs = await libraries
+    .find({ code: { $in: librariesPayload.map((item) => item.code) } }, { projection: { _id: 1, code: 1 } })
+    .toArray();
+
+  const libraryByCode = new Map(libraryDocs.map((item) => [item.code, item._id]));
 
   let upserted = 0;
   for (const item of booksPayload) {
+    const { libraryCode, ...bookData } = item;
+
+    const libraryId = libraryByCode.get(libraryCode);
+    if (!libraryId) {
+      throw new Error(`Khong tim thay library cho code ${libraryCode}`);
+    }
+
+    const normalizedIsbn = normalizeIsbn(bookData.isbn);
+    const filter = normalizedIsbn
+      ? { libraryId, isbnNormalized: normalizedIsbn }
+      : { libraryId, title: bookData.title, author: bookData.author };
+
     const result = await books.updateOne(
-      { isbn: item.isbn },
+      filter,
       {
         $set: {
-          ...item,
-          libraryId: library._id,
+          ...bookData,
+          isbnNormalized: normalizedIsbn,
+          libraryId,
           wishlistCount: 0,
           updatedAt: new Date(),
         },

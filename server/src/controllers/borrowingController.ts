@@ -2,14 +2,25 @@ import { Response } from 'express';
 import { borrowingService } from '../services';
 import { asyncHandler } from '../utils';
 import { AuthRequest } from '../types';
-import { GetBorrowingsQuery } from '../validators/borrowingSchema';
+import { GetBorrowingsQuery, CrossReturnLookupQuery } from '../validators/borrowingSchema';
 
 /**
  * Get all borrowings (admin/librarian)
  */
 export const getBorrowings = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const result = await borrowingService.getBorrowings(req.query as unknown as GetBorrowingsQuery);
+    const result = await borrowingService.getBorrowings(req.query as unknown as GetBorrowingsQuery, req.user!);
     res.json({ success: true, data: result.borrowings, meta: result.pagination });
+});
+
+/**
+ * Lookup cross-library return candidates for librarians.
+ */
+export const lookupCrossLibraryReturnCandidates = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowings = await borrowingService.lookupCrossLibraryReturnCandidates(
+        req.query as unknown as CrossReturnLookupQuery,
+        req.user!
+    );
+    res.json({ success: true, data: borrowings });
 });
 
 /**
@@ -37,10 +48,18 @@ export const createBorrowing = asyncHandler(async (req: AuthRequest, res: Respon
 });
 
 /**
+ * Create bulk borrowing request
+ */
+export const createBulkBorrowing = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowings = await borrowingService.createBulkBorrowing(req.user!._id.toString(), req.body);
+    res.status(201).json({ success: true, data: borrowings, message: 'Bulk borrowing request created successfully' });
+});
+
+/**
  * Confirm book pickup (librarian/admin)
  */
 export const confirmPickup = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const borrowing = await borrowingService.confirmPickup(req.params['id']!);
+    const borrowing = await borrowingService.confirmPickup(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Book pickup confirmed' });
 });
 
@@ -48,8 +67,24 @@ export const confirmPickup = asyncHandler(async (req: AuthRequest, res: Response
  * Return book (librarian/admin)
  */
 export const returnBook = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const borrowing = await borrowingService.returnBook(req.params['id']!);
+    const borrowing = await borrowingService.returnBook(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Book returned successfully' });
+});
+
+/**
+ * Receive a cross-library return at non-home library (librarian)
+ */
+export const receiveCrossLibraryReturn = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowing = await borrowingService.receiveCrossLibraryReturn(req.params['id']!, req.user!);
+    res.json({ success: true, data: borrowing, message: 'Cross-library return received successfully' });
+});
+
+/**
+ * Confirm receipt of cross-library return at home library (librarian/admin)
+ */
+export const receiveTransitReturn = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowing = await borrowingService.receiveTransitReturn(req.params['id']!, req.user!);
+    res.json({ success: true, data: borrowing, message: 'Transit return received successfully' });
 });
 
 /**
@@ -72,6 +107,19 @@ export const renewBorrowing = asyncHandler(async (req: AuthRequest, res: Respons
  * Mark fine as paid (librarian/admin)
  */
 export const payFine = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const borrowing = await borrowingService.payFine(req.params['id']!);
+    const borrowing = await borrowingService.payFine(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Fine marked as paid' });
+});
+
+/**
+ * Report a book as lost or damaged (librarian/admin)
+ */
+export const reportLostOrDamaged = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowing = await borrowingService.reportLostOrDamaged(
+        req.params['id']!,
+        req.user!,
+        req.body.status,
+        req.body.notes
+    );
+    res.json({ success: true, data: borrowing, message: `Borrowing marked as ${req.body.status}` });
 });

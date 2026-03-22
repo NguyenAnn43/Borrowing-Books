@@ -51,3 +51,21 @@ export const sanitizeObject = <T extends Record<string, unknown>>(obj: T): Parti
         Object.entries(obj).filter(([_, v]) => v !== undefined && v !== null)
     ) as Partial<T>;
 };
+
+/**
+ * Normalize ISBN for consistent storage and deduplication.
+ * - Trim
+ * - Uppercase
+ * - Remove dashes and all whitespaces
+ */
+export const normalizeIsbn = (isbn?: string | null): string | null => {
+    if (!isbn) return null;
+
+    const normalized = isbn
+        .trim()
+        .toUpperCase()
+        .replace(/-/g, '')
+        .replace(/\s+/g, '');
+
+    return normalized || null;
+};

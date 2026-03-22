@@ -81,6 +81,7 @@ const makeBook = (overrides = {}): Partial<IBook> => ({
     _id: new Types.ObjectId(),
     libraryId: new Types.ObjectId(),
     title: 'Test Book',
+    availableCopies: 0,
     ...overrides,
 });
 
@@ -127,7 +128,7 @@ describe('reservationService.createReservation', () => {
     });
 
     it('throws LIBRARY_MISMATCH when libraryId does not match book', async () => {
-        const book = makeBook({ libraryId: new Types.ObjectId() });
+        const book = makeBook({ libraryId: new Types.ObjectId(), availableCopies: 0 });
         mockBookFindById.mockResolvedValue(book);
 
         await expect(
@@ -136,6 +137,19 @@ describe('reservationService.createReservation', () => {
                 { bookId: book._id!.toString(), libraryId: new Types.ObjectId().toString() }
             )
         ).rejects.toMatchObject({ statusCode: 400, code: 'LIBRARY_MISMATCH' });
+    });
+
+    it('throws BOOK_AVAILABLE_FOR_BORROWING when book still has available copies', async () => {
+        const libraryId = new Types.ObjectId();
+        const book = makeBook({ libraryId, availableCopies: 2 });
+        mockBookFindById.mockResolvedValue(book);
+
+        await expect(
+            reservationService.createReservation(
+                new Types.ObjectId().toString(),
+                { bookId: book._id!.toString(), libraryId: libraryId.toString() }
+            )
+        ).rejects.toMatchObject({ statusCode: 400, code: 'BOOK_AVAILABLE_FOR_BORROWING' });
     });
 
     it('throws ALREADY_RESERVED when duplicate active reservation exists', async () => {

@@ -5,3 +5,8 @@ export { default as Borrowing } from './Borrowing';
 export { default as Reservation } from './Reservation';
 export { default as Notification } from './Notification';
 export { default as Wishlist } from './Wishlist';
+export { default as BookReview } from './BookReview';
+export { default as LibraryReview } from './LibraryReview';
+export { default as ReviewReport } from './ReviewReport';
+export { default as Payment } from './Payment';
+export { default as TransitRequest } from './TransitRequest';

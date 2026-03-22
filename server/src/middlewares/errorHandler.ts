@@ -11,16 +11,39 @@ export const errorHandler = (
     res: Response,
     _next: NextFunction
 ): void => {
-    const statusCode = (err as AppError).statusCode || 500;
+    const normalizedError = normalizeError(err);
+    const statusCode = normalizedError.statusCode || 500;
 
     // Log error
-    logger.error(`${statusCode} - ${err.message} - ${req.originalUrl} - ${req.method}`);
+    logger.error(`${statusCode} - ${normalizedError.message} - ${req.originalUrl} - ${req.method}`);
 
     if (config.NODE_ENV === 'development') {
-        sendErrorDev(err as AppError, res);
+        sendErrorDev(normalizedError, res);
     } else {
-        sendErrorProd(err as AppError, res);
+        sendErrorProd(normalizedError, res);
     }
+};
+
+const isMongoDuplicateKeyError = (err: unknown): err is { code: number; keyPattern?: Record<string, unknown>; keyValue?: Record<string, unknown> } => {
+    return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code?: number }).code === 11000);
+};
+
+const normalizeError = (err: AppError | Error): AppError => {
+    if (isMongoDuplicateKeyError(err)) {
+        const keyPattern = err.keyPattern || {};
+        const isBookDuplicateInLibrary = 'libraryId' in keyPattern && 'isbnNormalized' in keyPattern;
+
+        return new AppError(
+            isBookDuplicateInLibrary
+                ? 'A book with this ISBN already exists in the selected library'
+                : 'Duplicate data violates unique constraint',
+            409,
+            isBookDuplicateInLibrary ? 'BOOK_DUPLICATE_IN_LIBRARY' : 'DUPLICATE_KEY',
+            err.keyValue || null
+        );
+    }
+
+    return err as AppError;
 };
 
 /**

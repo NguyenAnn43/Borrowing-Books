@@ -1,8 +1,8 @@
 import { ClientSession } from 'mongoose';
-import { Book } from '../models';
+import { Book, BookReview } from '../models';
 import * as wishlistService from './wishlistService';
 import { AppError, formatPagination, sanitizeObject, PAGINATION } from '../utils';
-import { IBook, PaginationMeta } from '../types';
+import { IBook, IUser, PaginationMeta } from '../types';
 import { SearchBooksQuery, CreateBookInput, UpdateBookInput } from '../validators/bookSchema';
 import { BOOK_STATUS } from '../utils/constants';
 
@@ -10,6 +10,34 @@ interface GetBooksResult {
     books: IBook[];
     pagination: PaginationMeta;
 }
+
+interface GetBookAlternativesResult {
+    sourceBook: IBook;
+    alternatives: IBook[];
+    matchedBy: 'isbn' | 'title-author';
+}
+
+const toId = (value: unknown): string => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && value !== null && '_id' in (value as Record<string, unknown>)) {
+        const objectId = (value as { _id?: { toString?: () => string } })._id;
+        if (objectId && typeof objectId.toString === 'function') return objectId.toString();
+    }
+    if (typeof (value as { toString?: () => string }).toString === 'function') {
+        return (value as { toString: () => string }).toString();
+    }
+    return '';
+};
+
+const getLibrarianLibraryId = (requestingUser: IUser): string | null => {
+    if (requestingUser.role !== 'librarian') return null;
+    const libraryId = toId(requestingUser.libraryId);
+    if (!libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+    return libraryId;
+};
 
 /**
  * Get all books with pagination and filters
@@ -32,14 +60,15 @@ export const getBooks = async (params: SearchBooksQuery & { userId?: string }): 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
 
-    const [books, total] = await Promise.all([
-        Book.find(query)
+    const docs = await Book.find(query)
             .populate('libraryId', 'name code')
             .skip(skip)
             .limit(actualLimit)
-            .sort({ createdAt: -1 }) as Promise<IBook[]>,
-        Book.countDocuments(query),
-    ]);
+            .sort({ createdAt: -1 });
+        
+    const total = await Book.countDocuments(query);
+
+    const books = docs.map(doc => doc.toJSON() as unknown as IBook);
 
     if (includeWishlist && userId) {
         const bookIds = books.map((book) => book._id.toString());
@@ -47,6 +76,35 @@ export const getBooks = async (params: SearchBooksQuery & { userId?: string }): 
 
         books.forEach((book) => {
             book.isWishlisted = wishlistedBookIds.has(book._id.toString());
+        });
+    }
+
+    if (books.length > 0) {
+        const bookIds = books.map((book) => book._id);
+        const ratingRows = await BookReview.aggregate<{
+            _id: string;
+            avgStars: number;
+        }>([
+            {
+                $match: {
+                    bookId: { $in: bookIds },
+                    isHidden: false,
+                },
+            },
+            {
+                $group: {
+                    _id: '$bookId',
+                    avgStars: { $avg: '$stars' },
+                },
+            },
+        ]);
+
+        const ratingMap = new Map(
+            ratingRows.map((row) => [String(row._id), Number(row.avgStars.toFixed(1))])
+        );
+
+        books.forEach((book) => {
+            book.averageRating = ratingMap.get(book._id.toString()) ?? undefined;
         });
     }
 
@@ -60,34 +118,142 @@ export const getBooks = async (params: SearchBooksQuery & { userId?: string }): 
  * Get book by ID
  */
 export const getBookById = async (id: string, userId?: string): Promise<IBook> => {
-    const book = await Book.findById(id).populate('libraryId', 'name code address') as IBook | null;
+    const doc = await Book.findById(id).populate('libraryId', 'name code address');
 
-    if (!book) {
+    if (!doc) {
         throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
     }
+    
+    const book = doc.toJSON() as unknown as IBook;
     if (userId) {
         const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, [book._id.toString()]);
         book.isWishlisted = wishlistedBookIds.has(book._id.toString());
+    }
+
+    const ratingRow = await BookReview.aggregate<{ avgStars: number }>([
+        {
+            $match: {
+                bookId: book._id,
+                isHidden: false,
+            },
+        },
+        {
+            $group: {
+                _id: '$bookId',
+                avgStars: { $avg: '$stars' },
+            },
+        },
+    ]);
+
+    if (ratingRow.length > 0) {
+        book.averageRating = Number(ratingRow[0]!.avgStars.toFixed(1));
+    } else {
+        book.averageRating = undefined;
     }
 
     return book;
 };
 
 /**
+ * Get alternative copies of the same title in other libraries.
+ * Priority matching by normalized ISBN. Fallback to title+author if ISBN absent.
+ */
+export const getBookAlternatives = async (id: string, userId?: string): Promise<GetBookAlternativesResult> => {
+    const toPlainBook = (value: unknown): IBook => {
+        if (value && typeof value === 'object') {
+            const candidate = value as { toJSON?: () => unknown; toObject?: () => unknown };
+            if (typeof candidate.toJSON === 'function') {
+                return candidate.toJSON() as IBook;
+            }
+            if (typeof candidate.toObject === 'function') {
+                return candidate.toObject() as IBook;
+            }
+        }
+        return value as IBook;
+    };
+
+    const sourceDoc = await Book.findById(id).populate('libraryId', 'name code address');
+
+    if (!sourceDoc) {
+        throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+    
+    const sourceBook = toPlainBook(sourceDoc);
+
+    const matchedBy: 'isbn' | 'title-author' = sourceBook.isbnNormalized ? 'isbn' : 'title-author';
+
+    const alternativeQuery: Record<string, unknown> = {
+        _id: { $ne: sourceBook._id },
+        libraryId: { $ne: sourceBook.libraryId },
+    };
+
+    if (matchedBy === 'isbn') {
+        alternativeQuery.isbnNormalized = sourceBook.isbnNormalized;
+    } else {
+        alternativeQuery.title = sourceBook.title;
+        alternativeQuery.author = sourceBook.author;
+    }
+
+    const alternativeDocs = await Book.find(alternativeQuery)
+        .populate('libraryId', 'name code address')
+        .sort({ availableCopies: -1, createdAt: -1 });
+        
+    const alternatives = alternativeDocs.map((doc) => toPlainBook(doc));
+
+    if (userId && alternatives.length > 0) {
+        const alternativeIds = alternatives.map((book) => book._id.toString());
+        const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, alternativeIds);
+
+        alternatives.forEach((book) => {
+            book.isWishlisted = wishlistedBookIds.has(book._id.toString());
+        });
+    }
+
+    return {
+        sourceBook,
+        alternatives,
+        matchedBy,
+    };
+};
+
+/**
  * Create new book
  */
-export const createBook = async (bookData: CreateBookInput): Promise<IBook> => {
-    const book = await Book.create(bookData);
+export const createBook = async (bookData: CreateBookInput, requestingUser: IUser): Promise<IBook> => {
+    const librarianLibraryId = getLibrarianLibraryId(requestingUser);
+
+    if (librarianLibraryId && toId(bookData.libraryId) !== librarianLibraryId) {
+        throw new AppError('Librarian can only create books for the assigned library', 403, 'FORBIDDEN');
+    }
+
+    const payload: CreateBookInput = librarianLibraryId
+        ? { ...bookData, libraryId: librarianLibraryId }
+        : bookData;
+
+    const book = await Book.create(payload);
     return book.populate('libraryId', 'name code') as unknown as IBook;
 };
 
 /**
  * Update book
  */
-export const updateBook = async (id: string, updateData: UpdateBookInput): Promise<IBook> => {
+export const updateBook = async (id: string, updateData: UpdateBookInput, requestingUser: IUser): Promise<IBook> => {
+    const librarianLibraryId = getLibrarianLibraryId(requestingUser);
+    const existingBook = await Book.findById(id) as IBook | null;
+
+    if (!existingBook) {
+        throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    if (librarianLibraryId && toId(existingBook.libraryId) !== librarianLibraryId) {
+        throw new AppError('You are not authorized to manage books of another library', 403, 'FORBIDDEN');
+    }
+
+    const sanitizedUpdate = sanitizeObject(updateData) as UpdateBookInput;
+
     const book = await Book.findByIdAndUpdate(
         id,
-        sanitizeObject(updateData),
+        sanitizedUpdate,
         { new: true, runValidators: true }
     ).populate('libraryId', 'name code') as IBook | null;
 
@@ -101,7 +267,18 @@ export const updateBook = async (id: string, updateData: UpdateBookInput): Promi
 /**
  * Delete book
  */
-export const deleteBook = async (id: string): Promise<IBook> => {
+export const deleteBook = async (id: string, requestingUser: IUser): Promise<IBook> => {
+    const librarianLibraryId = getLibrarianLibraryId(requestingUser);
+    const existingBook = await Book.findById(id) as IBook | null;
+
+    if (!existingBook) {
+        throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    if (librarianLibraryId && toId(existingBook.libraryId) !== librarianLibraryId) {
+        throw new AppError('You are not authorized to manage books of another library', 403, 'FORBIDDEN');
+    }
+
     const book = await Book.findByIdAndDelete(id) as IBook | null;
 
     if (!book) {

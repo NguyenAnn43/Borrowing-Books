@@ -2,28 +2,28 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart } from "lucide-react";
+import { BookOpen, LayoutDashboard, BookCopy, Users, Library, Bell, LogOut, ChevronRight, Heart, UserRound, ShoppingCart, Home, Flag, Truck } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 import { RouteGuard } from "@/components/RouteGuard";
 
 const roleLabel: Record<string, string> = {
     admin: "Quản trị viên",
     librarian: "Thủ thư",
     user: "Độc giả",
-    guest: "Khách",
 };
 
 const roleBadgeColor: Record<string, string> = {
     admin: "bg-red-500/20 text-red-300 border-red-500/30",
     librarian: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
     user: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    guest: "bg-slate-500/20 text-slate-300 border-slate-500/30",
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const { user, logout } = useAuthStore();
+    const cartItems = useCartStore((state) => state.items);
 
     const handleLogout = async () => {
         await logout();
@@ -36,37 +36,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 ? "/dashboard/admin"
                 : user?.role === "librarian"
                     ? "/dashboard/librarian"
-                    : user?.role === "guest"
-                        ? "/dashboard/guest"
-                        : "/dashboard/user",
+                    : "/dashboard/user",
             label: "Tổng quan",
             icon: LayoutDashboard,
         },
-        { href: "/dashboard/books", label: "Sách", icon: BookOpen },
+        ...(user?.role !== "admin"
+            ? [{ href: "/dashboard/books", label: "Sách", icon: BookOpen }]
+            : []),
         ...(user?.role === "user"
             ? [
                 { href: "/dashboard/borrowings", label: "Mượn của tôi", icon: BookCopy },
                 { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
-                                { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
-              ]
+                { href: "/dashboard/payments", label: "Lịch sử thanh toán", icon: BookCopy },
+                { href: "/dashboard/reviews", label: "Lịch sử review", icon: Flag },
+                { href: "/dashboard/wishlist", label: "Yêu thích", icon: Heart },
+                { href: "/dashboard/cart", label: "Giỏ sách", icon: ShoppingCart },
+            ]
             : []),
-        ...(user?.role === "admin" || user?.role === "librarian"
+        ...(user?.role === "librarian"
             ? [
                 { href: "/dashboard/borrowings", label: "Quản lý mượn/trả", icon: BookCopy },
-                { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
-              ]
+                { href: "/dashboard/reservations", label: "Quản lý đặt trước", icon: BookCopy },
+                { href: "/dashboard/transits", label: "Luân chuyển sách", icon: Truck },
+                { href: "/dashboard/reviews", label: "Quản lý review", icon: Flag },
+            ]
             : []),
         ...(user?.role === "admin"
             ? [
                 { href: "/dashboard/users", label: "Người dùng", icon: Users },
                 { href: "/dashboard/libraries", label: "Thư viện", icon: Library },
-              ]
+                { href: "/dashboard/transits", label: "Luân chuyển sách", icon: Truck },
+                { href: "/dashboard/reviews", label: "Review bị báo cáo", icon: Flag },
+            ]
             : []),
+        { href: "/dashboard/profile", label: "Hồ sơ cá nhân", icon: UserRound },
         { href: "/dashboard/notifications", label: "Thông báo", icon: Bell },
     ];
 
     return (
-        <RouteGuard>
+        <RouteGuard allowedRoles={["admin", "librarian", "user"]}>
             <div className="min-h-screen bg-slate-950 flex">
                 {/* Sidebar */}
                 <aside className="w-64 flex-shrink-0 bg-slate-900/80 border-r border-white/5 flex flex-col">
@@ -97,6 +105,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                     </div>
 
+                    {/* Exit Dashboard */}
+                    <div className="px-3 py-3 border-b border-white/5">
+                        <Link
+                            href="/"
+                            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                            <Home className="h-4 w-4" />
+                            <span>Quay lại trang chủ</span>
+                        </Link>
+                    </div>
+
                     {/* Nav */}
                     <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
                         {navItems.map((item) => {
@@ -106,15 +125,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group ${
-                                        active
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative ${active
                                             ? "bg-blue-600/20 text-blue-300 border border-blue-500/30"
                                             : "text-slate-400 hover:text-white hover:bg-white/5"
-                                    }`}
+                                        }`}
                                 >
                                     <Icon className="h-4 w-4 flex-shrink-0" />
                                     <span>{item.label}</span>
-                                    {active && <ChevronRight className="h-3 w-3 ml-auto text-blue-400" />}
+                                    {item.href === "/dashboard/cart" && cartItems.length > 0 && (
+                                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+                                            {cartItems.length}
+                                        </span>
+                                    )}
+                                    {active && item.href !== "/dashboard/cart" && <ChevronRight className="h-3 w-3 ml-auto text-blue-400" />}
                                 </Link>
                             );
                         })}
@@ -127,7 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
                         >
                             <LogOut className="h-4 w-4" />
-                            {user?.role === "guest" ? "Thoát guest" : "Đăng xuất"}
+                            Đăng xuất
                         </button>
                     </div>
                 </aside>

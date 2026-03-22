@@ -1,0 +1,95 @@
+﻿
+> client@0.1.0 build
+> next build
+
+node.exe : ΓÜá 
+Warning: Next.js 
+inferred your 
+workspace root, but 
+it may not be correct.
+At C:\Program Files\no
+dejs\npm.ps1:29 char:3
++   & $NODE_EXE 
+$NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (ΓÜá Warnin   
+ g: Ne...not be co    
+rrect.:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+ We detected multiple 
+lockfiles and 
+selected the 
+directory of C:\k├¼7(D
+)\SDN_SWD\project\Borr
+owing-Books\pnpm-lock.
+yaml as the root 
+directory.
+ To silence this 
+warning, set 
+`turbopack.root` in 
+your Next.js config, 
+or consider removing 
+one of the lockfiles 
+if it's not needed.
+   See https://nextjs.
+org/docs/app/api-refer
+ence/config/next-confi
+g-js/turbopack#root-di
+rectory for more 
+information.
+ Detected additional 
+lockfiles: 
+   * C:\k├¼7(D)\SDN_SW
+D\project\Borrowing-Bo
+oks\client\pnpm-lock.y
+aml
+
+Γû▓ Next.js 16.1.4 (Turbopack)
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 6.4s
+  Running TypeScript ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/23) ...
+  Generating static pages using 11 workers (5/23) 
+  Generating static pages using 11 workers (11/23) 
+  Generating static pages using 11 workers (17/23) 
+Γ£ô Generating static pages using 11 workers (23/23) in 784.7ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /books/[bookId]
+Γö£ Γùï /dashboard
+Γö£ Γùï /dashboard/admin
+Γö£ Γùï /dashboard/books
+Γö£ Γùï /dashboard/borrowings
+Γö£ ╞Æ /dashboard/borrowings/[borrowingId]
+Γö£ Γùï /dashboard/cart
+Γö£ Γùï /dashboard/guest
+Γö£ Γùï /dashboard/librarian
+Γö£ Γùï /dashboard/libraries
+Γö£ Γùï /dashboard/notifications
+Γö£ Γùï /dashboard/payments
+Γö£ Γùï /dashboard/profile
+Γö£ Γùï /dashboard/reservations
+Γö£ Γùï /dashboard/reviews
+Γö£ Γùï /dashboard/user
+Γö£ Γùï /dashboard/users
+Γö£ Γùï /dashboard/wishlist
+Γö£ Γùï /libraries
+Γö£ Γùï /login
+Γöö Γùï /register
+
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+

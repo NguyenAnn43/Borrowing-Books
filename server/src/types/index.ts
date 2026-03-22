@@ -13,7 +13,10 @@ export interface IUser extends Document {
     libraryId?: Types.ObjectId;
     status: 'active' | 'inactive' | 'banned';
     maxBorrowLimit: number;
+    isFined: boolean;
     refreshToken?: string;
+    resetPasswordTokenHash?: string | null;
+    resetPasswordTokenExpiresAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;
@@ -41,6 +44,7 @@ export interface ILibrary extends Document {
 export interface IBook extends Document {
     _id: Types.ObjectId;
     isbn?: string;
+    isbnNormalized?: string | null;
     title: string;
     author: string;
     publisher?: string;
@@ -55,7 +59,9 @@ export interface IBook extends Document {
     libraryId: Types.ObjectId;
     totalCopies: number;
     availableCopies: number;
+    price: number;
     wishlistCount: number;
+    averageRating?: number;
     status: 'available' | 'unavailable';
     isWishlisted?: boolean;
     createdAt: Date;
@@ -79,13 +85,10 @@ export interface IBorrowing extends Document {
     libraryId: Types.ObjectId;
     borrowDate: Date;
     dueDate: Date;
-    /**
-     * @deprecated Use `actualReturnDate` instead.
-     * Kept for backwards-compat; mirrored from `actualReturnDate` on save.
-     */
-    returnDate?: Date;
     actualReturnDate?: Date;
-    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'cancelled';
+    returnHandledLibraryId?: Types.ObjectId;
+    transitCompletedAt?: Date;
+    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'return_transit' | 'cancelled' | 'lost' | 'damaged';
     fineAmount: number;
     isFined: boolean;
     /** Whether the fine has been paid by the user */
@@ -117,6 +120,37 @@ export interface IReservation extends Document {
     checkExpiry(): void;
 }
 
+// Transit request types
+export interface ITransitRequest extends Document {
+    _id: Types.ObjectId;
+    bookId: Types.ObjectId;
+    sourceLibraryId: Types.ObjectId;
+    targetLibraryId: Types.ObjectId;
+    /** Target-side book record after receive (existing or newly created) */
+    targetBookId?: Types.ObjectId;
+    quantity: number;
+    requestedBy: Types.ObjectId;
+    requestedForUserId?: Types.ObjectId;
+    reviewedBy?: Types.ObjectId;
+    dispatchedBy?: Types.ObjectId;
+    receivedBy?: Types.ObjectId;
+    cancelledBy?: Types.ObjectId;
+    status: 'pending' | 'approved' | 'rejected' | 'in_transit' | 'completed' | 'cancelled';
+    note?: string;
+    decisionNote?: string;
+    dispatchNote?: string;
+    receiveNote?: string;
+    cancelReason?: string;
+    requestedAt: Date;
+    approvedAt?: Date;
+    rejectedAt?: Date;
+    dispatchedAt?: Date;
+    receivedAt?: Date;
+    cancelledAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 // Notification types
 export interface INotification extends Document {
     _id: Types.ObjectId;
@@ -127,6 +161,72 @@ export interface INotification extends Document {
     isRead: boolean;
     metadata?: Record<string, unknown>;
     createdAt: Date;
+}
+
+// Review types
+export interface IBookReview extends Document {
+    _id: Types.ObjectId;
+    userId: Types.ObjectId;
+    bookId: Types.ObjectId;
+    libraryId: Types.ObjectId;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    hiddenBy?: Types.ObjectId;
+    hiddenAt?: Date;
+    hiddenReason?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface ILibraryReview extends Document {
+    _id: Types.ObjectId;
+    userId: Types.ObjectId;
+    libraryId: Types.ObjectId;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    hiddenBy?: Types.ObjectId;
+    hiddenAt?: Date;
+    hiddenReason?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface IReviewReport extends Document {
+    _id: Types.ObjectId;
+    reviewType: 'book' | 'library';
+    reviewId: Types.ObjectId;
+    reviewModel: 'BookReview' | 'LibraryReview';
+    reporterId: Types.ObjectId;
+    reason: string;
+    status: 'pending' | 'resolved';
+    adminAction?: 'keep' | 'hide' | 'delete';
+    adminNote?: string;
+    resolvedBy?: Types.ObjectId;
+    resolvedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+// Payment types
+export interface IPayment extends Document {
+    _id: Types.ObjectId;
+    userId: Types.ObjectId;
+    borrowingId: Types.ObjectId;
+    provider: 'vnpay' | 'cash';
+    paidLibraryId?: Types.ObjectId;
+    status: 'pending' | 'success' | 'failed';
+    amount: number;
+    txnRef: string;
+    vnpTxnNo?: string;
+    vnpResponseCode?: string;
+    paidAt?: Date;
+    rawResponse?: Record<string, unknown>;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 // Express extended types

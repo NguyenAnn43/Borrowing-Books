@@ -50,8 +50,22 @@ const userSchema = new Schema<IUser>(
             type: Number,
             default: BORROWING_SETTINGS.MAX_BORROW_LIMIT,
         },
+        isFined: {
+            type: Boolean,
+            default: false,
+        },
         refreshToken: {
             type: String,
+            select: false,
+        },
+        resetPasswordTokenHash: {
+            type: String,
+            default: null,
+            select: false,
+        },
+        resetPasswordTokenExpiresAt: {
+            type: Date,
+            default: null,
             select: false,
         },
     },

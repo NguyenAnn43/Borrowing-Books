@@ -1,12 +1,18 @@
 import mongoose, { Schema, Model } from 'mongoose';
 import { IBook } from '../types';
 import { BOOK_STATUS } from '../utils/constants';
+import { normalizeIsbn } from '../utils';
 
 const bookSchema = new Schema<IBook>(
     {
         isbn: {
             type: String,
             trim: true,
+        },
+        isbnNormalized: {
+            type: String,
+            trim: true,
+            default: null,
         },
         title: {
             type: String,
@@ -32,6 +38,11 @@ const bookSchema = new Schema<IBook>(
         },
         description: {
             type: String,
+        },
+        price: {
+            type: Number,
+            default: 0,
+            min: [0, 'Price cannot be negative'],
         },
         coverImage: {
             type: String,
@@ -69,6 +80,12 @@ const bookSchema = new Schema<IBook>(
             default: 0,
             min: [0, 'Wishlist count cannot be negative'],
         },
+        averageRating: {
+            type: Number,
+            default: null,
+            min: [1, 'Average rating cannot be below 1'],
+            max: [5, 'Average rating cannot exceed 5'],
+        },
         status: {
             type: String,
             enum: Object.values(BOOK_STATUS),
@@ -86,9 +103,57 @@ const bookSchema = new Schema<IBook>(
 bookSchema.index({ title: 'text', author: 'text', tags: 'text' });
 bookSchema.index({ libraryId: 1, status: 1 });
 bookSchema.index({ category: 1 });
-// [P2] Sparse unique index: allows multiple documents with no ISBN (null/undefined)
-// but enforces uniqueness among documents that DO have an ISBN value.
-bookSchema.index({ isbn: 1 }, { unique: true, sparse: true });
+bookSchema.index(
+    { libraryId: 1, isbnNormalized: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            isbnNormalized: {
+                $exists: true,
+                $type: 'string',
+            },
+        },
+    }
+);
+
+bookSchema.pre('validate', function (next) {
+    this.isbnNormalized = normalizeIsbn(this.isbn);
+    next();
+});
+
+bookSchema.pre('findOneAndUpdate', function (next) {
+    const update = this.getUpdate() as
+        | {
+            isbn?: string | null;
+            isbnNormalized?: string | null;
+            $set?: {
+                isbn?: string | null;
+                isbnNormalized?: string | null;
+            };
+          }
+        | undefined;
+
+    if (!update) {
+        next();
+        return;
+    }
+
+    const isbnFromSet = update.$set?.isbn;
+    const isbnFromRoot = update.isbn;
+    const hasIsbnInUpdate = isbnFromSet !== undefined || isbnFromRoot !== undefined;
+
+    if (hasIsbnInUpdate) {
+        const isbnValue = isbnFromSet !== undefined ? isbnFromSet : isbnFromRoot;
+        const normalized = normalizeIsbn(isbnValue);
+        update.$set = {
+            ...(update.$set || {}),
+            isbnNormalized: normalized,
+        };
+        this.setUpdate(update);
+    }
+
+    next();
+});
 
 // Validate availableCopies <= totalCopies
 bookSchema.pre('save', function (next) {

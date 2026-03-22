@@ -18,7 +18,7 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
     const router = useRouter();
-    const { login, isLoading, error, clearError, isAuthenticated, user, logout, continueAsGuest, lastLoginAccount, getCurrentUser } = useAuthStore();
+    const { login, isLoading, error, clearError, isAuthenticated, user, logout, lastLoginAccount, getCurrentUser } = useAuthStore();
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(() => {
         if (typeof window === "undefined") return false;
@@ -36,8 +36,17 @@ export default function LoginPage() {
     });
 
     useEffect(() => {
-        getCurrentUser();
-    }, [getCurrentUser]);
+        if (isAuthenticated || user?.role === "guest") return;
+
+        const token =
+            typeof window !== "undefined"
+                ? localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")
+                : null;
+
+        if (token) {
+            void getCurrentUser();
+        }
+    }, [getCurrentUser, isAuthenticated, user]);
 
     useEffect(() => {
         const rememberedEmail = localStorage.getItem("rememberedEmail");
@@ -57,39 +66,20 @@ export default function LoginPage() {
                 localStorage.removeItem("rememberedEmail");
             }
 
-            // Redirect based on role (user is set in store after login)
-            const stored = JSON.parse(localStorage.getItem("auth-storage") || "{}");
-            const role = stored?.state?.user?.role;
-            if (role === "admin") router.push("/dashboard/admin");
-            else if (role === "librarian") router.push("/dashboard/librarian");
-            else router.push("/dashboard/user");
+            router.push("/");
         } catch {
             // Error is handled in store
         }
     };
 
-    const redirectByRole = (role?: string) => {
-        if (role === "admin") router.push("/dashboard/admin");
-        else if (role === "librarian") router.push("/dashboard/librarian");
-        else if (role === "guest") router.push("/dashboard/guest");
-        else router.push("/dashboard/user");
-    };
-
     const handleContinueWithCurrent = () => {
-        if (user?.role) {
-            redirectByRole(user.role);
-        }
+        router.push("/");
     };
 
     const handleLoginAnotherAccount = async () => {
         await logout();
         setShowLoginForm(true);
         clearError();
-    };
-
-    const handleContinueGuest = () => {
-        continueAsGuest();
-        router.push("/dashboard/guest");
     };
 
     return (
@@ -166,13 +156,6 @@ export default function LoginPage() {
                                 Đăng nhập tài khoản khác
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={handleContinueGuest}
-                                className="w-full h-11 rounded-xl border border-white/20 bg-transparent hover:bg-white/10 text-blue-200/90 font-medium text-sm transition-all"
-                            >
-                                Vào với vai trò guest
-                            </button>
                         </div>
                     ) : (
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -278,13 +261,6 @@ export default function LoginPage() {
                             </button>
                         )}
 
-                        <button
-                            type="button"
-                            onClick={handleContinueGuest}
-                            className="w-full h-10 rounded-xl border border-white/20 bg-transparent hover:bg-white/10 text-blue-200/90 text-sm transition-all"
-                        >
-                            Vào với vai trò guest
-                        </button>
                     </form>
                     )}
 

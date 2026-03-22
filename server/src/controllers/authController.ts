@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { authService } from '../services';
-import { asyncHandler } from '../utils';
+import { asyncHandler, AppError } from '../utils';
 import { AuthRequest } from '../types';
 
 /**
@@ -16,6 +16,37 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
             accessToken: result.accessToken,
         },
         message: 'User registered successfully',
+    });
+});
+
+/**
+ * Request OTP for register email verification
+ */
+export const requestRegisterOtp = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const proxyIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0];
+    const requestIp = proxyIp?.trim() || req.ip;
+    const result = await authService.requestRegisterOtp(email, requestIp);
+
+    res.json({
+        success: true,
+        data: result,
+        message: 'OTP sent to email',
+    });
+});
+
+/**
+ * Verify OTP for register email verification
+ */
+export const verifyRegisterOtp = asyncHandler(async (req: Request, res: Response) => {
+    const { email, otpCode } = req.body;
+    const result = await authService.verifyRegisterOtp(email, otpCode);
+
+    res.json({
+        success: true,
+        data: result,
+        message: 'Email verified successfully',
     });
 });
 
@@ -63,6 +94,10 @@ export const logout = asyncHandler(async (req: AuthRequest, res: Response) => {
  */
 export const refreshToken = asyncHandler(async (req: Request, res: Response) => {
     const token = req.body.refreshToken || req.cookies.refreshToken;
+    if (!token) {
+        throw new AppError('Refresh token is required', 401, 'TOKEN_REQUIRED');
+    }
+
     const tokens = await authService.refreshToken(token);
 
     res.cookie('refreshToken', tokens.refreshToken, {
@@ -90,5 +125,43 @@ export const me = asyncHandler(async (req: AuthRequest, res: Response) => {
     res.json({
         success: true,
         data: user,
+    });
+});
+
+/**
+ * Change password for current user
+ */
+export const changePassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    await authService.changePassword(req.user!._id.toString(), req.body);
+
+    res.json({
+        success: true,
+        message: 'Password changed successfully',
+    });
+});
+
+/**
+ * Forgot password - request reset link.
+ */
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const result = await authService.forgotPassword(email);
+
+    res.json({
+        success: true,
+        data: result,
+        message: 'If the email exists, a reset link has been sent.',
+    });
+});
+
+/**
+ * Reset password by token.
+ */
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+    await authService.resetPassword(req.body);
+
+    res.json({
+        success: true,
+        message: 'Password reset successfully',
     });
 });
