@@ -381,29 +381,27 @@ export default function BorrowingsPage() {
                 {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
                 {success && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{success}</div>}
 
-                {/* Search bar for admin/librarian */}
-                {canViewAll && (
-                    <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4">
-                        <div className="flex items-center gap-2">
-                            <Search className="h-5 w-5 text-indigo-400" />
-                            <Input
-                                type="text"
-                                placeholder="Tìm kiếm theo tên sách hoặc người mượn..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="flex-1"
-                            />
-                            {searchTerm && (
-                                <button
-                                    onClick={resetSearch}
-                                    className="p-2 text-slate-400 hover:text-slate-200"
-                                >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            )}
-                        </div>
+                {/* Search bar for all users */}
+                <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-4">
+                    <div className="flex items-center gap-2">
+                        <Search className="h-5 w-5 text-indigo-400" />
+                        <Input
+                            type="text"
+                            placeholder={canViewAll ? "Tìm kiếm theo tên sách hoặc người mượn..." : "Tìm kiếm theo tên sách..."}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="flex-1"
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={resetSearch}
+                                className="p-2 text-slate-400 hover:text-slate-200"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
-                )}
+                </div>
 
                 <div className="rounded-2xl border-2 border-indigo-500/30 bg-indigo-500/5 p-4">
                     <p className="text-xs font-semibold text-indigo-300 mb-3 uppercase">Lọc theo trạng thái</p>

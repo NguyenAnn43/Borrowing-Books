@@ -4,7 +4,7 @@ import { FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/stores/authStore";
 import { useCartStore } from "@/stores/cartStore";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Search } from "lucide-react";
 
 interface HeaderProps {
   searchText: string;
@@ -73,7 +73,7 @@ export function Header({
           <label className="hidden h-10 min-w-40 max-w-64 flex-col lg:flex">
             <form className="flex h-full w-full flex-1 items-stretch rounded-lg" onSubmit={onSearch}>
               <div className="flex items-center justify-center rounded-l-lg border-r-0 bg-gray-100 pl-4 text-[#616f89] transition-colors duration-300 dark:bg-gray-800">
-                <span className="material-symbols-outlined text-xl">search</span>
+                <Search className="h-5 w-5" />
               </div>
               <input
                 className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-l-none border-none border-l-0 bg-gray-100 px-4 pl-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-none focus:outline-0 focus:ring-0 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-700"
@@ -108,7 +108,6 @@ export function Header({
                   {user?.fullName?.charAt(0).toUpperCase() ?? "U"}
                 </span>
                 <span className="hidden sm:inline">Tài khoản</span>
-                <span className="material-symbols-outlined text-base">expand_more</span>
               </button>
 
               {isAccountMenuOpen ? (
