@@ -11,7 +11,7 @@ export interface GetBorrowingsParams {
     q?: string;
     page?: number;
     limit?: number;
-    status?: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
+    status?: "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | "lost" | "damaged";
     libraryId?: string;
     userId?: string;
 }
@@ -100,6 +100,14 @@ export const borrowingService = {
      */
     renewBorrowing: async (id: string): Promise<IBorrowing> => {
         const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/renew`);
+        return response.data.data;
+    },
+
+    /**
+     * Report a book as lost or damaged (admin/librarian)
+     */
+    reportLostOrDamaged: async (id: string, data: { status: "lost" | "damaged"; notes?: string }): Promise<IBorrowing> => {
+        const response = await api.post<ApiResponse<IBorrowing>>(`/borrowings/${id}/report-issue`, data);
         return response.data.data;
     },
 };

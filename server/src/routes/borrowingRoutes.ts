@@ -1,7 +1,7 @@
 import { Router, IRouter } from 'express';
 import { borrowingController } from '../controllers';
 import { protect, authorize, validate } from '../middlewares';
-import { createBorrowingSchema, createBulkBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema } from '../validators';
+import { createBorrowingSchema, createBulkBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema, reportIssueSchema } from '../validators';
 import { ROLES } from '../utils';
 
 const router: IRouter = Router();
@@ -89,6 +89,15 @@ router.put(
     authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.payFine
+);
+
+/** POST /borrowings/:id/report-issue — librarian/admin reports lost/damaged book */
+router.post(
+    '/:id/report-issue',
+    protect,
+    authorize(ROLES.LIBRARIAN, ROLES.ADMIN),
+    validate(reportIssueSchema),
+    borrowingController.reportLostOrDamaged
 );
 
 export default router;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Loader2, Search, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { useAuthStore } from "@/stores/authStore";
@@ -47,27 +47,23 @@ export default function ReservationsPage() {
     const canManage = user?.role === "librarian";
 
     const fetchReservations = useCallback(
-        async (p?: number, l?: number, searchQ?: string) => {
+        async () => {
             setLoading(true);
             setError(null);
             try {
-                const currentPage = p || page;
-                const currentLimit = l || limit;
-                const query = searchQ || debouncedTerm;
-
                 if (canViewAll) {
                     const result = await reservationService.getReservations({
-                        page: currentPage,
-                        limit: currentLimit,
-                        q: query || undefined,
+                        page: page,
+                        limit: limit,
+                        q: debouncedTerm || undefined,
                         status: (selectedStatus as ReservationStatusType) || undefined,
                     });
                     setReservations(result.reservations);
                     updatePagination(result.pagination);
                 } else {
                     const result = await reservationService.getMyReservations({
-                        page: currentPage,
-                        limit: currentLimit,
+                        page: page,
+                        limit: limit,
                         status: selectedStatus || undefined,
                     });
                     setReservations(result.reservations);
@@ -83,17 +79,32 @@ export default function ReservationsPage() {
         [page, limit, debouncedTerm, canViewAll, selectedStatus, updatePagination]
     );
 
-    useEffect(() => {
-        void fetchReservations(1, limit, debouncedTerm);
-        // Reset to page 1 when search changes
-        if (debouncedTerm) {
-            goToPage(1);
-        }
-    }, [debouncedTerm, limit, selectedStatus, fetchReservations, goToPage]);
+    const prevSearchRef = useRef(debouncedTerm);
+    const prevStatusRef = useRef(selectedStatus);
+    const prevLimitRef = useRef(limit);
 
     useEffect(() => {
-        void fetchReservations();
-    }, [fetchReservations, page]);
+        let shouldResetPage = false;
+        
+        if (prevSearchRef.current !== debouncedTerm) {
+            prevSearchRef.current = debouncedTerm;
+            shouldResetPage = true;
+        }
+        if (prevStatusRef.current !== selectedStatus) {
+            prevStatusRef.current = selectedStatus;
+            shouldResetPage = true;
+        }
+        if (prevLimitRef.current !== limit) {
+            prevLimitRef.current = limit;
+            shouldResetPage = true;
+        }
+
+        if (shouldResetPage && page !== 1) {
+            goToPage(1);
+        } else {
+            void fetchReservations();
+        }
+    }, [fetchReservations, debouncedTerm, selectedStatus, limit, page, goToPage]);
 
     const runAction = async (id: string, action: () => Promise<unknown>, successMessage: string) => {
         setActionLoading(id);

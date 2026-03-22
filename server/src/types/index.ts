@@ -57,6 +57,7 @@ export interface IBook extends Document {
     libraryId: Types.ObjectId;
     totalCopies: number;
     availableCopies: number;
+    price: number;
     wishlistCount: number;
     averageRating?: number;
     status: 'available' | 'unavailable';
@@ -88,7 +89,7 @@ export interface IBorrowing extends Document {
      */
     returnDate?: Date;
     actualReturnDate?: Date;
-    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'cancelled';
+    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'cancelled' | 'lost' | 'damaged';
     fineAmount: number;
     isFined: boolean;
     /** Whether the fine has been paid by the user */

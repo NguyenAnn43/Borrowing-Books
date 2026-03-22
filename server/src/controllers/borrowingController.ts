@@ -83,3 +83,16 @@ export const payFine = asyncHandler(async (req: AuthRequest, res: Response) => {
     const borrowing = await borrowingService.payFine(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Fine marked as paid' });
 });
+
+/**
+ * Report a book as lost or damaged (librarian/admin)
+ */
+export const reportLostOrDamaged = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowing = await borrowingService.reportLostOrDamaged(
+        req.params['id']!,
+        req.user!,
+        req.body.status,
+        req.body.notes
+    );
+    res.json({ success: true, data: borrowing, message: `Borrowing marked as ${req.body.status}` });
+});

@@ -39,6 +39,11 @@ const bookSchema = new Schema<IBook>(
         description: {
             type: String,
         },
+        price: {
+            type: Number,
+            default: 0,
+            min: [0, 'Price cannot be negative'],
+        },
         coverImage: {
             type: String,
             default: null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Bell, Loader2 } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { notificationService } from "@/services/notificationService";
@@ -21,13 +21,12 @@ export default function NotificationsPage() {
     const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications]);
 
     const fetchNotifications = useCallback(
-        async (p?: number) => {
+        async () => {
             setLoading(true);
             setError(null);
             try {
-                const currentPage = p || page;
                 const result = await notificationService.getMyNotifications({
-                    page: currentPage,
+                    page,
                     limit,
                     unreadOnly,
                 });
@@ -43,14 +42,27 @@ export default function NotificationsPage() {
         [page, limit, unreadOnly, updatePagination]
     );
 
-    useEffect(() => {
-        void fetchNotifications(1);
-        goToPage(1);
-    }, [unreadOnly, fetchNotifications, goToPage]);
+    const prevUnreadOnlyRef = useRef(unreadOnly);
+    const prevLimitRef = useRef(limit);
 
     useEffect(() => {
-        void fetchNotifications();
-    }, [page, fetchNotifications]);
+        let shouldResetPage = false;
+        
+        if (prevUnreadOnlyRef.current !== unreadOnly) {
+            prevUnreadOnlyRef.current = unreadOnly;
+            shouldResetPage = true;
+        }
+        if (prevLimitRef.current !== limit) {
+            prevLimitRef.current = limit;
+            shouldResetPage = true;
+        }
+
+        if (shouldResetPage && page !== 1) {
+            goToPage(1);
+        } else {
+            void fetchNotifications();
+        }
+    }, [fetchNotifications, unreadOnly, limit, page, goToPage]);
 
     const handleMarkAsRead = async (id: string) => {
         setActionLoading(true);

@@ -25,7 +25,7 @@ export const updateBorrowingSchema = {
 export const getBorrowingsSchema = {
     query: z.object({
         q: z.string().optional(),
-        status: z.enum(['pending', 'borrowed', 'returned', 'overdue', 'cancelled']).optional(),
+        status: z.enum(['pending', 'borrowed', 'returned', 'overdue', 'cancelled', 'lost', 'damaged']).optional(),
         libraryId: z.string().optional(),
         userId: z.string().optional(),
         page: z.string().transform(Number).default('1'),
@@ -33,7 +33,18 @@ export const getBorrowingsSchema = {
     }),
 };
 
+export const reportIssueSchema = {
+    params: z.object({
+        id: z.string().min(1, 'Borrowing ID is required'),
+    }),
+    body: z.object({
+        status: z.enum(['lost', 'damaged']),
+        notes: z.string().optional(),
+    }),
+};
+
 // Types
 export type CreateBorrowingInput = z.infer<typeof createBorrowingSchema.body>;
 export type CreateBulkBorrowingInput = z.infer<typeof createBulkBorrowingSchema.body>;
+export type ReportIssueInput = z.infer<typeof reportIssueSchema.body>;
 export type GetBorrowingsQuery = z.infer<typeof getBorrowingsSchema.query>;
