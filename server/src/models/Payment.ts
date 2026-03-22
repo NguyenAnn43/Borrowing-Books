@@ -17,8 +17,14 @@ const paymentSchema = new Schema<IPayment>(
         },
         provider: {
             type: String,
-            enum: ['vnpay'],
+            enum: ['vnpay', 'cash'],
             default: 'vnpay',
+        },
+        paidLibraryId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Library',
+            default: null,
+            index: true,
         },
         status: {
             type: String,
@@ -61,6 +67,7 @@ const paymentSchema = new Schema<IPayment>(
 
 paymentSchema.index({ userId: 1, createdAt: -1 });
 paymentSchema.index({ borrowingId: 1, createdAt: -1 });
+paymentSchema.index({ paidLibraryId: 1, paidAt: -1 });
 
 const Payment: Model<IPayment> = mongoose.model<IPayment>('Payment', paymentSchema);
 

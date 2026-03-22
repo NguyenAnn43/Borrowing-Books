@@ -1,6 +1,6 @@
 import mongoose, { Types } from 'mongoose';
 import config from '../config/env';
-import { Borrowing, Book, Notification, User } from '../models';
+import { Borrowing, Book, Notification, Payment, User } from '../models';
 import * as notificationService from './notificationService';
 import * as bookService from './bookService';
 import * as reservationService from './reservationService';
@@ -44,11 +44,16 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
         throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
     }
 
-    const { q, page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
+    const { q, page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, finePaid, libraryId, userId } = params;
 
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
     if (userId) query.userId = userId;
+    if (finePaid === 'true') {
+        query.finePaid = true;
+    } else if (finePaid === 'false') {
+        query.finePaid = false;
+    }
 
     // Librarians can only view borrowings for their own library
     if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
@@ -185,11 +190,18 @@ export const lookupCrossLibraryReturnCandidates = async (
  */
 export const getMyBorrowings = async (
     userId: string,
-    params: { page?: number; limit?: number; status?: string } = {}
+    params: { page?: number; limit?: number; status?: string; finePaid?: string | boolean } = {}
 ): Promise<GetBorrowingsResult> => {
-    const { page = 1, limit = 10, status } = params;
+    const { page = 1, limit = 10, status, finePaid } = params;
     const query: Record<string, unknown> = { userId };
     if (status) query.status = status;
+    if (typeof finePaid === 'boolean') {
+        query.finePaid = finePaid;
+    } else if (finePaid === 'true') {
+        query.finePaid = true;
+    } else if (finePaid === 'false') {
+        query.finePaid = false;
+    }
 
     const [borrowings, total] = await Promise.all([
         Borrowing.find(query).skip((page - 1) * limit).limit(limit).sort({ createdAt: -1 }) as Promise<IBorrowing[]>,
@@ -744,14 +756,27 @@ export const payFine = async (id: string, requestingUser?: IUser): Promise<IBorr
         }
     }
 
-    return markFineAsPaidByBorrowingId(id);
+    return markFineAsPaidByBorrowingId(id, {
+        createPaymentRecord: true,
+        paymentProvider: 'cash',
+        paidByUserId: requestingUser?._id.toString(),
+        paidLibraryId: requestingUser?.libraryId ? toId(requestingUser.libraryId) : undefined,
+    });
 };
 
 /**
  * Mark a borrowing fine as paid by borrowing ID.
  * Shared by librarian manual action and VNPay callback.
  */
-export const markFineAsPaidByBorrowingId = async (id: string): Promise<IBorrowing> => {
+export const markFineAsPaidByBorrowingId = async (
+    id: string,
+    options: {
+        createPaymentRecord?: boolean;
+        paymentProvider?: 'vnpay' | 'cash';
+        paidLibraryId?: string;
+        paidByUserId?: string;
+    } = {}
+): Promise<IBorrowing> => {
     const borrowing = await Borrowing.findById(id) as IBorrowing | null;
     if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
@@ -761,6 +786,25 @@ export const markFineAsPaidByBorrowingId = async (id: string): Promise<IBorrowin
 
     if (borrowing.finePaid) {
         throw new AppError('Fine has already been paid', 400, 'FINE_ALREADY_PAID');
+    }
+
+    if (options.createPaymentRecord) {
+        const paidAt = new Date();
+        const txnRef = `cash-${borrowing._id.toString().slice(-8)}-${paidAt.getTime()}`;
+        await Payment.create({
+            userId: borrowing.userId,
+            borrowingId: borrowing._id,
+            provider: options.paymentProvider || 'cash',
+            paidLibraryId: options.paidLibraryId || borrowing.libraryId,
+            status: 'success',
+            amount: borrowing.fineAmount,
+            txnRef,
+            paidAt,
+            rawResponse: {
+                source: 'manual-fine-collection',
+                paidByUserId: options.paidByUserId || null,
+            },
+        });
     }
 
     borrowing.finePaid = true;

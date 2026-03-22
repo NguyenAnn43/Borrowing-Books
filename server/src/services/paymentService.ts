@@ -135,6 +135,7 @@ export const createVnpayFinePayment = async (
         userId: user._id,
         borrowingId: borrowing._id,
         provider: 'vnpay',
+        paidLibraryId: borrowing.libraryId,
         status: 'pending',
         amount,
         txnRef,
