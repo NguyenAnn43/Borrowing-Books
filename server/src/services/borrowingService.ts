@@ -1,8 +1,10 @@
 import mongoose, { Types } from 'mongoose';
-import { Borrowing, Book, User } from '../models';
+import config from '../config/env';
+import { Borrowing, Book, Notification, User } from '../models';
 import * as notificationService from './notificationService';
 import * as bookService from './bookService';
 import * as reservationService from './reservationService';
+import { sendEmail } from './mailService';
 import logger from '../utils/logger';
 import {
     AppError, formatPagination, generateDueDate, calculateOverdueDays, calculateFine,
@@ -697,4 +699,307 @@ export const reportLostOrDamaged = async (
     } finally {
         session.endSession();
     }
+};
+
+/**
+ * Send reminders for borrowings that will be due in N days.
+ * Creates both in-app notification and email (if SMTP configured).
+ * Returns the number of users that received reminder notifications.
+ */
+export const sendDueSoonReminders = async (daysBeforeDue: number = 2): Promise<number> => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let remindedCount = 0;
+    let skippedAlreadySent = 0;
+    let skippedNoEmail = 0;
+
+    const reminderDays = Array.from({ length: Math.max(1, daysBeforeDue) }, (_, i) => i + 1).reverse();
+
+    for (const dayLeft of reminderDays) {
+        const targetStart = new Date(todayStart);
+        targetStart.setDate(targetStart.getDate() + dayLeft);
+
+        const targetEnd = new Date(targetStart);
+        targetEnd.setDate(targetEnd.getDate() + 1);
+
+        const borrowings = await Borrowing.find({
+            status: BORROWING_STATUS.BORROWED,
+            dueDate: { $gte: targetStart, $lt: targetEnd },
+        }) as IBorrowing[];
+
+        logger.info(
+            `[Scheduler] due-soon scan: dayLeft=${dayLeft}, window=${targetStart.toISOString()}..${targetEnd.toISOString()}, matched=${borrowings.length}`
+        );
+
+        for (const borrowing of borrowings) {
+            const borrowingId = borrowing._id.toString();
+            const userId = toId(borrowing.userId);
+
+            const existingReminder = config.SCHEDULER.dueSoonAllowRepeatInSameDay
+                ? null
+                : await Notification.findOne({
+                    userId,
+                    type: NOTIFICATION_TYPE.OVERDUE,
+                    'metadata.kind': 'due_soon_reminder',
+                    'metadata.borrowingId': borrowingId,
+                    'metadata.daysBeforeDue': dayLeft,
+                    createdAt: { $gte: todayStart },
+                }).select('_id');
+
+            if (existingReminder) {
+                skippedAlreadySent += 1;
+                continue;
+            }
+
+            const userRef = borrowing.userId as unknown as { fullName?: string; email?: string };
+            const bookRef = borrowing.bookId as unknown as { title?: string };
+
+            const userEmail = typeof userRef.email === 'string' ? userRef.email : '';
+            const userName = typeof userRef.fullName === 'string' ? userRef.fullName : 'Bạn đọc';
+            const bookTitle = typeof bookRef.title === 'string' ? bookRef.title : 'đầu sách của bạn';
+            const dueDateText = borrowing.dueDate.toLocaleDateString('vi-VN');
+
+            await notificationService.create({
+                userId,
+                title: 'Nhắc hạn trả sách',
+                message: `Sách "${bookTitle}" sẽ đến hạn sau ${dayLeft} ngày (hạn trả: ${dueDateText}).`,
+                type: NOTIFICATION_TYPE.OVERDUE,
+                metadata: {
+                    kind: 'due_soon_reminder',
+                    borrowingId,
+                    daysBeforeDue: dayLeft,
+                },
+            });
+
+            if (userEmail) {
+                try {
+                    await sendEmail({
+                        to: userEmail,
+                        subject: `[BorrowingBooks] Nhắc hạn trả sách còn ${dayLeft} ngày`,
+                        text: `Xin chào ${userName},\n\nSách "${bookTitle}" của bạn sẽ đến hạn sau ${dayLeft} ngày (hạn trả: ${dueDateText}).\nVui lòng trả hoặc gia hạn đúng hạn để tránh phí phạt.\n\nTruy cập hệ thống BorrowingBooks để xem chi tiết.`,
+                                                html: `
+<!doctype html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8" />
+    </head>
+    <body style="margin:0;padding:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#10223d;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px;background:#f3f6fb;">
+            <tr>
+                <td align="center">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #dfe7f3;">
+                        <tr>
+                            <td style="padding:18px 22px;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#ffffff;">
+                                <div style="font-size:18px;font-weight:700;letter-spacing:.2px;">BorrowingBooks</div>
+                                <div style="margin-top:4px;font-size:13px;opacity:.95;">Nhắc hạn trả sách tự động</div>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:22px;">
+                                <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;">Xin chào <strong>${userName}</strong>,</p>
+                                <p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;">
+                                    Sách <strong>${bookTitle}</strong> của bạn sẽ đến hạn sau
+                                    <strong style="color:#b45309;">${dayLeft} ngày</strong>.
+                                </p>
+
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 16px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                                    <tr>
+                                        <td style="padding:12px 14px;font-size:14px;line-height:1.6;">
+                                            <div><strong>Hạn trả:</strong> ${dueDateText}</div>
+                                            <div><strong>Tình trạng:</strong> Đang mượn</div>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <p style="margin:0 0 18px 0;font-size:14px;line-height:1.7;color:#334155;">
+                                    Vui lòng trả sách hoặc gia hạn đúng hạn để tránh phí phạt.
+                                </p>
+
+                                <div style="margin:0 0 8px 0;">
+                                    <a href="http://localhost:3000/dashboard/borrowings" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:10px 16px;border-radius:8px;">
+                                        Xem lịch sử mượn
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:14px 22px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.6;color:#64748b;">
+                                Đây là email tự động, vui lòng không trả lời email này.
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>`,
+                    });
+                } catch (err) {
+                    logger.warn(`[Scheduler] Failed to send due reminder email for borrowing ${borrowingId}: ${(err as Error).message}`);
+                }
+            } else {
+                skippedNoEmail += 1;
+                logger.warn(`[Scheduler] Skip email reminder: user has no email (borrowingId=${borrowingId})`);
+            }
+
+            remindedCount += 1;
+        }
+    }
+
+    logger.info(
+        `[Scheduler] due-soon result: windowDays=${daysBeforeDue}, reminded=${remindedCount}, skippedAlreadySent=${skippedAlreadySent}, skippedNoEmail=${skippedNoEmail}, allowRepeatInSameDay=${config.SCHEDULER.dueSoonAllowRepeatInSameDay}`
+    );
+
+    return remindedCount;
+};
+
+/**
+ * Send daily overdue-fine reminder emails.
+ * Targets borrowings with status=OVERDUE and unpaid fines.
+ * Sends at most 1 notification + email per borrowing per day (spam guard).
+ * Returns the number of reminders sent.
+ */
+export const sendOverdueFineReminders = async (): Promise<number> => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let remindedCount = 0;
+    let skippedAlreadySent = 0;
+    let skippedNoEmail = 0;
+
+    const overdueBorrowings = await Borrowing.find({
+        status: BORROWING_STATUS.OVERDUE,
+        finePaid: false,
+    })
+        .populate('userId', 'fullName email')
+        .populate('bookId', 'title') as IBorrowing[];
+
+    logger.info(`[Scheduler] overdue-fine scan: found=${overdueBorrowings.length} unpaid-overdue borrowings`);
+
+    for (const borrowing of overdueBorrowings) {
+        const borrowingId = borrowing._id.toString();
+        const userId = toId(borrowing.userId);
+
+        // Spam guard: chỉ gửi 1 lần/ngày cho mỗi borrowing
+        const alreadySentToday = await Notification.findOne({
+            userId,
+            type: NOTIFICATION_TYPE.OVERDUE,
+            'metadata.kind': 'overdue_fine_reminder',
+            'metadata.borrowingId': borrowingId,
+            createdAt: { $gte: todayStart },
+        }).select('_id');
+
+        if (alreadySentToday) {
+            skippedAlreadySent += 1;
+            continue;
+        }
+
+        const userRef = borrowing.userId as unknown as { fullName?: string; email?: string };
+        const bookRef = borrowing.bookId as unknown as { title?: string };
+
+        const userEmail = typeof userRef.email === 'string' ? userRef.email : '';
+        const userName = typeof userRef.fullName === 'string' ? userRef.fullName : 'Bạn đọc';
+        const bookTitle = typeof bookRef.title === 'string' ? bookRef.title : 'đầu sách của bạn';
+        const dueDateText = borrowing.dueDate.toLocaleDateString('vi-VN');
+        const overdueDays = calculateOverdueDays(borrowing.dueDate);
+        const fineAmount = borrowing.fineAmount ?? calculateFine(overdueDays, BORROWING_SETTINGS.OVERDUE_FINE_PER_DAY);
+
+        await notificationService.create({
+            userId,
+            title: 'Thông báo sách quá hạn – Tiền phạt chưa thanh toán',
+            message: `Sách "${bookTitle}" đã quá hạn ${overdueDays} ngày. Tiền phạt: ${fineAmount.toLocaleString('vi-VN')} VND.`,
+            type: NOTIFICATION_TYPE.OVERDUE,
+            metadata: {
+                kind: 'overdue_fine_reminder',
+                borrowingId,
+                overdueDays,
+                fineAmount,
+            },
+        });
+
+        if (userEmail) {
+            try {
+                await sendEmail({
+                    to: userEmail,
+                    subject: `[BorrowingBooks] Sách quá hạn ${overdueDays} ngày – Vui lòng thanh toán phạt`,
+                    text: `Xin chào ${userName},\n\nSách "${bookTitle}" của bạn đã quá hạn ${overdueDays} ngày (hạn trả: ${dueDateText}).\nTiền phạt hiện tại: ${fineAmount.toLocaleString('vi-VN')} VND.\n\nVui lòng đến thư viện để trả sách và thanh toán phạt sớm nhất có thể.\n\nTrân trọng,\nBorrowingBooks`,
+                    html: `
+<!doctype html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8" />
+    </head>
+    <body style="margin:0;padding:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#10223d;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 12px;background:#f3f6fb;">
+            <tr>
+                <td align="center">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #dfe7f3;">
+                        <tr>
+                            <td style="padding:18px 22px;background:linear-gradient(135deg,#b91c1c,#dc2626);color:#ffffff;">
+                                <div style="font-size:18px;font-weight:700;letter-spacing:.2px;">BorrowingBooks</div>
+                                <div style="margin-top:4px;font-size:13px;opacity:.95;">Thông báo sách quá hạn &amp; tiền phạt</div>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:22px;">
+                                <p style="margin:0 0 12px 0;font-size:15px;line-height:1.6;">Xin chào <strong>${userName}</strong>,</p>
+                                <p style="margin:0 0 14px 0;font-size:15px;line-height:1.7;">
+                                    Sách <strong>${bookTitle}</strong> của bạn đã
+                                    <strong style="color:#b91c1c;">quá hạn ${overdueDays} ngày</strong>.
+                                </p>
+
+                                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 16px 0;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;">
+                                    <tr>
+                                        <td style="padding:12px 14px;font-size:14px;line-height:1.7;">
+                                            <div><strong>Hạn trả ban đầu:</strong> ${dueDateText}</div>
+                                            <div><strong>Số ngày quá hạn:</strong> <span style="color:#b91c1c;font-weight:700;">${overdueDays} ngày</span></div>
+                                            <div><strong>Tiền phạt:</strong> <span style="color:#b91c1c;font-weight:700;">${fineAmount.toLocaleString('vi-VN')} VND</span></div>
+                                        </td>
+                                    </tr>
+                                </table>
+
+                                <p style="margin:0 0 18px 0;font-size:14px;line-height:1.7;color:#334155;">
+                                    Vui lòng đến thư viện để trả sách và thanh toán tiền phạt sớm nhất có thể để tránh phát sinh thêm.
+                                </p>
+
+                                <div style="margin:0 0 8px 0;">
+                                    <a href="http://localhost:3000/dashboard/borrowings" style="display:inline-block;background:#b91c1c;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:10px 16px;border-radius:8px;">
+                                        Xem chi tiết &amp; thanh toán
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="padding:14px 22px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.6;color:#64748b;">
+                                Đây là email tự động, vui lòng không trả lời email này.
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </body>
+</html>`,
+                });
+            } catch (err) {
+                logger.warn(`[Scheduler] Failed to send overdue-fine email for borrowing ${borrowingId}: ${(err as Error).message}`);
+            }
+        } else {
+            skippedNoEmail += 1;
+            logger.warn(`[Scheduler] Skip overdue-fine email: user has no email (borrowingId=${borrowingId})`);
+        }
+
+        remindedCount += 1;
+    }
+
+    logger.info(
+        `[Scheduler] overdue-fine result: reminded=${remindedCount}, skippedAlreadySent=${skippedAlreadySent}, skippedNoEmail=${skippedNoEmail}`
+    );
+
+    return remindedCount;
 };

@@ -1,5 +1,6 @@
 import cron from 'node-cron';
-import { checkAndMarkOverdue } from '../services/borrowingService';
+import config from '../config/env';
+import { checkAndMarkOverdue, sendDueSoonReminders, sendOverdueFineReminders } from '../services/borrowingService';
 import { expireReservations } from '../services/reservationService';
 import { cleanupOld as cleanupOldNotifications } from '../services/notificationService';
 import logger from '../utils/logger';
@@ -45,5 +46,28 @@ export const startScheduler = (): void => {
         }
     });
 
+    // Job 4: Send due-soon reminders (default: 2 days before due date)
+    cron.schedule(config.SCHEDULER.dueSoonReminderCron, async () => {
+        logger.info('[Scheduler] Running due soon reminders...');
+        try {
+            const count = await sendDueSoonReminders(config.SCHEDULER.dueSoonReminderDays);
+            logger.info(`[Scheduler] Sent ${count} due-soon reminder(s)`);
+        } catch (err) {
+            logger.error('[Scheduler] due soon reminders failed', err);
+        }
+    });
+
+    // Job 5: Send overdue-fine reminders — runs daily at 08:00
+    cron.schedule(config.SCHEDULER.overdueFineReminderCron, async () => {
+        logger.info('[Scheduler] Running overdue fine reminders...');
+        try {
+            const count = await sendOverdueFineReminders();
+            logger.info(`[Scheduler] Sent ${count} overdue-fine reminder(s)`);
+        } catch (err) {
+            logger.error('[Scheduler] overdue fine reminders failed', err);
+        }
+    });
+
+    logger.info(`[Scheduler] due-soon reminder cron: ${config.SCHEDULER.dueSoonReminderCron} (daysBeforeDue=${config.SCHEDULER.dueSoonReminderDays})`);
     logger.info('[Scheduler] All cron jobs registered');
 };

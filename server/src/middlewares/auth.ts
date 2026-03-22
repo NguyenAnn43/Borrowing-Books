@@ -65,6 +65,10 @@ export const optionalAuth = asyncHandler(async (req: AuthRequest, res: Response,
         token = req.headers.authorization.split(' ')[1];
     }
 
+    if (!token && req.cookies?.accessToken) {
+        token = req.cookies.accessToken;
+    }
+
     if (!token) {
         return next();
     }

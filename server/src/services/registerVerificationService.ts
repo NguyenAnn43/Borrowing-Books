@@ -50,26 +50,27 @@ const mailTransport =
         : null;
 
 const sendOtpEmail = async (email: string, otpCode: string): Promise<void> => {
-    const subject = 'Borrowing Books - Ma xac thuc dang ky';
+    const subject = 'Borrowing Books - Mã xác thực đăng ký';
     const text = [
-        'Ban vua yeu cau tao tai khoan Borrowing Books.',
-        `Ma OTP cua ban la: ${otpCode}`,
-        'Ma co hieu luc trong 5 phut.',
-        'Neu ban khong thuc hien yeu cau nay, vui long bo qua email nay.',
+        'Bạn vừa yêu cầu tạo tài khoản Borrowing Books.',
+        `Mã OTP của bạn là: ${otpCode}`,
+        'Mã có hiệu lực trong 5 phút.',
+        'Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.',
     ].join('\n');
     const html = `
+        <meta charset="UTF-8" />
         <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; background: #f8fafc;">
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px;">
-                <h2 style="margin: 0 0 12px; color: #1e293b;">Xac thuc dang ky Borrowing Books</h2>
+                <h2 style="margin: 0 0 12px; color: #1e293b;">Xác thực đăng ký Borrowing Books</h2>
                 <p style="margin: 0 0 16px; color: #334155; line-height: 1.5;">
-                    Ban vua yeu cau tao tai khoan. Vui long nhap ma OTP ben duoi de hoan tat dang ky.
+                    Bạn vừa yêu cầu tạo tài khoản. Vui lòng nhập mã OTP bên dưới để hoàn tất đăng ký.
                 </p>
                 <div style="margin: 18px 0; padding: 16px; text-align: center; border-radius: 10px; background: #eff6ff; border: 1px dashed #93c5fd;">
                     <div style="font-size: 28px; letter-spacing: 8px; font-weight: 700; color: #1d4ed8;">${otpCode}</div>
-                    <div style="margin-top: 8px; font-size: 13px; color: #475569;">Ma OTP co hieu luc trong 5 phut</div>
+                    <div style="margin-top: 8px; font-size: 13px; color: #475569;">Mã OTP có hiệu lực trong 5 phút</div>
                 </div>
                 <p style="margin: 0; color: #64748b; font-size: 13px; line-height: 1.5;">
-                    Neu ban khong thuc hien yeu cau nay, vui long bo qua email nay.
+                    Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.
                 </p>
             </div>
         </div>

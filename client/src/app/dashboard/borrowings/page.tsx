@@ -664,18 +664,6 @@ export default function BorrowingsPage() {
                                                         </button>
                                                     )}
 
-                                                    {!canViewAll && (item.status === "borrowed" || item.status === "returned" || item.status === "overdue") && item.bookId?._id && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => void openReviewModal(item.bookId._id, item.bookId.title || "Sách")}
-                                                            className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1 text-xs text-yellow-200 hover:bg-yellow-500/20"
-                                                        >
-                                                            <span className="inline-flex items-center gap-1">
-                                                                <Star className="h-3 w-3" /> Đánh giá
-                                                            </span>
-                                                        </button>
-                                                    )}
-
                                                     {!canViewAll && (item.status === "borrowed" || item.status === "returned" || item.status === "overdue") && item.libraryId?._id && (
                                                         <button
                                                             type="button"

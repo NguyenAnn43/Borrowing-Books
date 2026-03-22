@@ -75,6 +75,7 @@ export default function HomePage() {
   const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
   const [wishlistLoadingBookId, setWishlistLoadingBookId] = useState<string | null>(null);
   const { user, getCurrentUser } = useAuthStore();
+  const isSignedIn = Boolean(user && user.role !== "guest");
 
   const loadBooks = useCallback(async (nextQuery = "", nextCategory = "") => {
     setIsLoadingBooks(true);
@@ -88,6 +89,7 @@ export default function HomePage() {
           q: nextQuery || undefined,
           category: nextCategory || undefined,
           status: "available",
+          includeWishlist: true,
         }),
         bookService.getBooks({
           page: 1,
@@ -198,6 +200,10 @@ export default function HomePage() {
     void getCurrentUser();
   }, [getCurrentUser]);
 
+  useEffect(() => {
+    void loadBooks(query, activeCategory);
+  }, [isSignedIn, user?._id, query, activeCategory, loadBooks]);
+
 
 
   useEffect(() => {
@@ -254,7 +260,6 @@ export default function HomePage() {
     event.preventDefault();
     event.stopPropagation();
 
-    const isSignedIn = user && user.role !== "guest";
     if (!isSignedIn) {
       setWishlistMessageType("info");
       setWishlistMessage("Bạn cần đăng nhập để thêm sách vào wishlist.");

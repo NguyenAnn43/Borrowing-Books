@@ -40,6 +40,12 @@ interface Config {
         pass?: string;
         from: string;
     };
+    SCHEDULER: {
+        dueSoonReminderCron: string;
+        dueSoonReminderDays: number;
+        dueSoonAllowRepeatInSameDay: boolean;
+        overdueFineReminderCron: string;
+    };
     CLIENT_URL: string;
     VNPAY: {
         TMN_CODE: string;
@@ -90,6 +96,13 @@ const config: Config = {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
         from: process.env.SMTP_FROM || 'no-reply@borrowingbooks.local',
+    },
+
+    SCHEDULER: {
+        dueSoonReminderCron: process.env.DUE_SOON_REMINDER_CRON || '0 8 * * *',
+        dueSoonReminderDays: parseInt(process.env.DUE_SOON_REMINDER_DAYS || '2', 10),
+        dueSoonAllowRepeatInSameDay: process.env.DUE_SOON_REMINDER_ALLOW_REPEAT_IN_DAY === 'true',
+        overdueFineReminderCron: process.env.OVERDUE_FINE_REMINDER_CRON || '0 8 * * *',
     },
 
     CLIENT_URL: process.env.CLIENT_URL || process.env.CORS_ORIGIN || 'http://localhost:3000',
