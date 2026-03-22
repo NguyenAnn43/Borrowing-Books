@@ -527,6 +527,7 @@ export default function BorrowingsPage() {
                                             const renewalCount = item.renewalCount ?? 0;
                                             const maxRenewals = item.maxRenewals ?? DEFAULT_MAX_RENEWALS;
                                             const reachedRenewalLimit = renewalCount >= maxRenewals;
+                                            const canPayFineViaVnpay = item.status === "overdue" || item.status === "returned";
 
                                             return (
                                             <tr key={item._id} className="border-b border-white/5 text-slate-200 hover:bg-slate-800/30 transition-colors">
@@ -603,7 +604,34 @@ export default function BorrowingsPage() {
                                                         </button>
                                                     )}
 
-                                                    {/* Fine payment for users is processed via VNPay only. Librarian/admin only monitor status. */}
+                                                    {/* Librarian confirms cash payment at library; users can pay online via VNPay when eligible. */}
+
+                                                    {canManage && item.isFined && item.fineAmount > 0 && !item.finePaid && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={actionLoading === item._id}
+                                                            onClick={() =>
+                                                                void runAction(
+                                                                    item._id,
+                                                                    () => borrowingService.payFine(item._id),
+                                                                    "Đã xác nhận thu tiền phạt tại thư viện."
+                                                                )
+                                                            }
+                                                            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
+                                                        >
+                                                            Xác nhận đã thu
+                                                        </button>
+                                                    )}
+
+                                                    {canManage && item.isFined && item.fineAmount > 0 && item.finePaid && (
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 opacity-70"
+                                                        >
+                                                            Đã thu tại quầy
+                                                        </button>
+                                                    )}
 
                                                     {!canViewAll && item.status === "pending" && (
                                                         <button
@@ -660,7 +688,7 @@ export default function BorrowingsPage() {
                                                         </button>
                                                     )}
 
-                                                    {!canViewAll && item.isFined && item.fineAmount > 0 && !item.finePaid && (
+                                                    {!canViewAll && canPayFineViaVnpay && item.isFined && item.fineAmount > 0 && !item.finePaid && (
                                                         <button
                                                             type="button"
                                                             disabled={actionLoading === item._id}
@@ -671,7 +699,7 @@ export default function BorrowingsPage() {
                                                         </button>
                                                     )}
 
-                                                    {!canViewAll && item.isFined && item.fineAmount > 0 && item.finePaid && (
+                                                    {!canViewAll && canPayFineViaVnpay && item.isFined && item.fineAmount > 0 && item.finePaid && (
                                                         <button
                                                             type="button"
                                                             disabled

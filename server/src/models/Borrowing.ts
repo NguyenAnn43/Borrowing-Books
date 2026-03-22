@@ -28,13 +28,6 @@ const borrowingSchema = new Schema<IBorrowing>(
             type: Date,
             required: [true, 'Due date is required'],
         },
-        /**
-         * @deprecated Use actualReturnDate. Mirrored on save for backwards compat.
-         */
-        returnDate: {
-            type: Date,
-            default: null,
-        },
         actualReturnDate: {
             type: Date,
             default: null,
@@ -88,14 +81,6 @@ borrowingSchema.pre(/^find/, function (next) {
         .populate('userId', 'fullName email')
         .populate('bookId', 'title author coverImage')
         .populate('libraryId', 'name code');
-    next();
-});
-
-// Mirror returnDate from actualReturnDate for backwards compat
-borrowingSchema.pre('save', function (next) {
-    if (this.actualReturnDate) {
-        this.returnDate = this.actualReturnDate;
-    }
     next();
 });
 

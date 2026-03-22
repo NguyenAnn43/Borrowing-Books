@@ -76,7 +76,6 @@ export interface IBorrowing {
     libraryId: Pick<ILibrary, "_id" | "name" | "code">;
     borrowDate: string;
     dueDate: string;
-    returnDate?: string;
     actualReturnDate?: string;
     status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | "lost" | "damaged";
     fineAmount: number;

@@ -83,11 +83,6 @@ export interface IBorrowing extends Document {
     libraryId: Types.ObjectId;
     borrowDate: Date;
     dueDate: Date;
-    /**
-     * @deprecated Use `actualReturnDate` instead.
-     * Kept for backwards-compat; mirrored from `actualReturnDate` on save.
-     */
-    returnDate?: Date;
     actualReturnDate?: Date;
     status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'cancelled' | 'lost' | 'damaged';
     fineAmount: number;

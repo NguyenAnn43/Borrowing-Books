@@ -399,7 +399,6 @@ export const returnBook = async (id: string, requestingUser: IUser): Promise<IBo
 
         const now = new Date();
         borrowing.actualReturnDate = now;
-        // returnDate is mirrored automatically in pre-save hook
         await borrowing.save({ session });
 
         // [P0] Atomic increment — same transaction
@@ -620,7 +619,7 @@ export const reportLostOrDamaged = async (
     session.startTransaction();
 
     try {
-        const borrowing = await Borrowing.findById(id).populate('bookId').session(session) as IBorrowing | null;
+        const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
         if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
         // Check if already lost or damaged to prevent duplicate penalties
@@ -639,7 +638,9 @@ export const reportLostOrDamaged = async (
             throw new AppError('Only active or overdue borrowings can be reported as lost or damaged', 400, 'INVALID_STATUS');
         }
 
-        const book = borrowing.bookId as unknown as IBook;
+        // Always load the source book document directly to ensure we have
+        // pricing/stock fields regardless of Borrowing auto-populate projections.
+        const book = await Book.findById(toId(borrowing.bookId)).session(session) as IBook | null;
         if (!book) throw new AppError('Associated book not found', 404, 'BOOK_NOT_FOUND');
 
         // Determine penalty multiplier
@@ -652,6 +653,8 @@ export const reportLostOrDamaged = async (
 
         borrowing.fineAmount += penaltyFee;
         borrowing.isFined = true;
+        // A new penalty means there is an outstanding balance again.
+        borrowing.finePaid = false;
         borrowing.status = status === 'lost' ? BORROWING_STATUS.LOST : BORROWING_STATUS.DAMAGED;
         if (notes) {
             borrowing.notes = borrowing.notes ? `${borrowing.notes}\n[${status.toUpperCase()}]: ${notes}` : `[${status.toUpperCase()}]: ${notes}`;
