@@ -29,6 +29,8 @@ export const BORROWING_STATUS = {
     RETURNED: 'returned',
     OVERDUE: 'overdue',
     CANCELLED: 'cancelled',
+    LOST: 'lost',
+    DAMAGED: 'damaged',
 } as const;
 
 export const RESERVATION_STATUS = {
@@ -87,6 +89,8 @@ export const BORROWING_SETTINGS = {
     OVERDUE_FINE_PER_DAY: 5000,
     MAX_RENEWALS: 2,
     RENEWAL_DAYS: 7,
+    LOST_PENALTY_MULTIPLIER: 3,
+    DAMAGED_PENALTY_MULTIPLIER: 2,
 } as const;
 
 // Reservation settings

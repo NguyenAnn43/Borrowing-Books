@@ -600,3 +600,98 @@ export const checkAndMarkOverdue = async (): Promise<number> => {
     );
     return result.modifiedCount;
 };
+
+/**
+ * Report a book as lost or damaged (librarian/admin action).
+ * Calculates penalty and decrements stock.
+ */
+export const reportLostOrDamaged = async (
+    id: string,
+    requestingUser: IUser,
+    status: 'lost' | 'damaged',
+    notes?: string
+): Promise<IBorrowing> => {
+    // Librarians must be assigned to a library
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const borrowing = await Borrowing.findById(id).populate('bookId').session(session) as IBorrowing | null;
+        if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
+
+        // Check if already lost or damaged to prevent duplicate penalties
+        if (borrowing.status === BORROWING_STATUS.LOST || borrowing.status === BORROWING_STATUS.DAMAGED) {
+             throw new AppError(`Borrowing is already marked as ${borrowing.status}`, 400, 'ALREADY_REPORTED');
+        }
+
+        // Librarians can only manage borrowings for their own library
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+            if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+                throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
+            }
+        }
+
+        if (borrowing.status !== BORROWING_STATUS.BORROWED && borrowing.status !== BORROWING_STATUS.OVERDUE) {
+            throw new AppError('Only active or overdue borrowings can be reported as lost or damaged', 400, 'INVALID_STATUS');
+        }
+
+        const book = borrowing.bookId as unknown as IBook;
+        if (!book) throw new AppError('Associated book not found', 404, 'BOOK_NOT_FOUND');
+
+        // Determine penalty multiplier
+        const penaltyMultiplier = status === 'lost' 
+            ? BORROWING_SETTINGS.LOST_PENALTY_MULTIPLIER 
+            : BORROWING_SETTINGS.DAMAGED_PENALTY_MULTIPLIER;
+        
+        const bookPrice = book.price || 0;
+        const penaltyFee = bookPrice * penaltyMultiplier;
+
+        borrowing.fineAmount += penaltyFee;
+        borrowing.isFined = true;
+        borrowing.status = status === 'lost' ? BORROWING_STATUS.LOST : BORROWING_STATUS.DAMAGED;
+        if (notes) {
+            borrowing.notes = borrowing.notes ? `${borrowing.notes}\n[${status.toUpperCase()}]: ${notes}` : `[${status.toUpperCase()}]: ${notes}`;
+        }
+        
+        const now = new Date();
+        borrowing.actualReturnDate = now;
+
+        await borrowing.save({ session });
+
+        // Update user fine status
+        await User.findByIdAndUpdate(borrowing.userId, { isFined: true }, { session });
+
+        // Decrement total copies since the book is lost or damaged beyond repair.
+        // It was already decremented from availableCopies when borrowed.
+        if (book.totalCopies > 0) {
+            await Book.findByIdAndUpdate(
+                book._id, 
+                { $inc: { totalCopies: -1 } },
+                { session }
+            );
+        }
+
+        await session.commitTransaction();
+
+        const penaltyReason = status === 'lost' ? 'làm mất sách' : 'làm hỏng sách';
+        const message = `Sách "${book.title}" đã được báo cáo là ${penaltyReason}. Bạn bị phạt ${penaltyFee.toLocaleString('vi-VN')} VND. Vui lòng thanh toán tại thư viện.`;
+        
+        await notificationService.create({
+            userId: toId(borrowing.userId),
+            title: `Báo cáo ${penaltyReason}`,
+            message,
+            type: NOTIFICATION_TYPE.BORROWING,
+        });
+
+        return borrowing;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
+    }
+};

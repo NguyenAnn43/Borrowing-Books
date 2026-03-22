@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Loader2, Search, Star, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
@@ -21,6 +21,8 @@ const BORROWING_STATUS = [
     { value: "returned", label: "Đã trả" },
     { value: "overdue", label: "Quá hạn" },
     { value: "cancelled", label: "Đã hủy" },
+    { value: "lost", label: "Mất sách" },
+    { value: "damaged", label: "Hỏng sách" },
 ] as const;
 
 const getStatusLabel = (status: string): string => {
@@ -30,6 +32,8 @@ const getStatusLabel = (status: string): string => {
         returned: "Đã trả",
         overdue: "Quá hạn",
         cancelled: "Đã hủy",
+        lost: "Mất sách",
+        damaged: "Hỏng sách",
     };
     return statusMap[status] || status;
 };
@@ -41,6 +45,8 @@ const getStatusColor = (status: string): string => {
         returned: "bg-green-500/20 border border-green-500/50 text-green-200",
         overdue: "bg-amber-500/20 border border-amber-500/50 text-amber-200",
         cancelled: "bg-red-500/20 border border-red-500/50 text-red-200",
+        lost: "bg-red-900/40 border border-red-500/50 text-red-200",
+        damaged: "bg-orange-600/20 border border-orange-500/50 text-orange-200",
     };
     return colorMap[status] || "bg-slate-500/20 border border-slate-500/50 text-slate-200";
 };
@@ -87,6 +93,14 @@ export default function BorrowingsPage() {
     const [libraryReviewImagesText, setLibraryReviewImagesText] = useState<string>("");
     const [libraryReviewError, setLibraryReviewError] = useState<string | null>(null);
 
+    const [reportModalOpen, setReportModalOpen] = useState(false);
+    const [reportBorrowingId, setReportBorrowingId] = useState<string | null>(null);
+    const [reportBookTitle, setReportBookTitle] = useState("");
+    const [reportStatus, setReportStatus] = useState<"lost" | "damaged">("lost");
+    const [reportNotes, setReportNotes] = useState("");
+    const [reportSubmitting, setReportSubmitting] = useState(false);
+    const [reportError, setReportError] = useState<string | null>(null);
+
     const { searchTerm, setSearchTerm, debouncedTerm, resetSearch } = useSearch({ debounceMs: 300 });
     const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 10 });
 
@@ -94,27 +108,23 @@ export default function BorrowingsPage() {
     const canManage = user?.role === "librarian";
 
     const fetchBorrowings = useCallback(
-        async (p?: number, l?: number, searchQ?: string) => {
+        async () => {
             setLoading(true);
             setError(null);
             try {
-                const currentPage = p || page;
-                const currentLimit = l || limit;
-                const query = searchQ || debouncedTerm;
-
                 if (canViewAll) {
                     const result = await borrowingService.getBorrowings({
-                        page: currentPage,
-                        limit: currentLimit,
-                        q: query || undefined,
-                        status: (selectedStatus as "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | undefined) || undefined,
+                        page: page,
+                        limit: limit,
+                        q: debouncedTerm || undefined,
+                        status: (selectedStatus as "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | "lost" | "damaged" | undefined) || undefined,
                     });
                     setBorrowings(result.borrowings);
                     updatePagination(result.pagination);
                 } else {
                     const result = await borrowingService.getMyBorrowings({
-                        page: currentPage,
-                        limit: currentLimit,
+                        page: page,
+                        limit: limit,
                         status: selectedStatus || undefined,
                     });
                     setBorrowings(result.borrowings);
@@ -130,17 +140,34 @@ export default function BorrowingsPage() {
         [page, limit, debouncedTerm, canViewAll, selectedStatus, updatePagination]
     );
 
-    useEffect(() => {
-        void fetchBorrowings(1, limit, debouncedTerm);
-        // Reset to page 1 when search changes
-        if (debouncedTerm) {
-            goToPage(1);
-        }
-    }, [debouncedTerm, limit, selectedStatus, fetchBorrowings, goToPage]);
+    // Reset page to 1 if search term or status changes, except on initial load where page is already 1.
+    // To prevent fetch loops and race conditions, we track the previous search/status.
+    const prevSearchRef = useRef(debouncedTerm);
+    const prevStatusRef = useRef(selectedStatus);
+    const prevLimitRef = useRef(limit);
 
     useEffect(() => {
-        void fetchBorrowings();
-    }, [page, fetchBorrowings]);
+        let shouldResetPage = false;
+        
+        if (prevSearchRef.current !== debouncedTerm) {
+            prevSearchRef.current = debouncedTerm;
+            shouldResetPage = true;
+        }
+        if (prevStatusRef.current !== selectedStatus) {
+            prevStatusRef.current = selectedStatus;
+            shouldResetPage = true;
+        }
+        if (prevLimitRef.current !== limit) {
+            prevLimitRef.current = limit;
+            shouldResetPage = true;
+        }
+
+        if (shouldResetPage && page !== 1) {
+            goToPage(1);
+        } else {
+            void fetchBorrowings();
+        }
+    }, [fetchBorrowings, debouncedTerm, selectedStatus, limit, page, goToPage]);
 
     const runAction = async (id: string, action: () => Promise<unknown>, successMessage: string) => {
         setActionLoading(id);
@@ -155,6 +182,41 @@ export default function BorrowingsPage() {
             setError(message);
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    const openReportModal = (id: string, title: string) => {
+        setReportBorrowingId(id);
+        setReportBookTitle(title);
+        setReportStatus("lost");
+        setReportNotes("");
+        setReportError(null);
+        setReportModalOpen(true);
+    };
+
+    const closeReportModal = () => {
+        if (reportSubmitting) return;
+        setReportModalOpen(false);
+        setReportBorrowingId(null);
+    };
+
+    const submitReportIssue = async () => {
+        if (!reportBorrowingId) return;
+        setReportSubmitting(true);
+        setReportError(null);
+        try {
+            await borrowingService.reportLostOrDamaged(reportBorrowingId, {
+                status: reportStatus,
+                notes: reportNotes.trim() || undefined,
+            });
+            setSuccess("Đã báo cáo sách thành công.");
+            await fetchBorrowings();
+            closeReportModal();
+        } catch (err) {
+            const message = getApiErrorMessage(err) || "Đã xảy ra lỗi khi báo cáo.";
+            setReportError(message);
+        } finally {
+            setReportSubmitting(false);
         }
     };
 
@@ -530,6 +592,17 @@ export default function BorrowingsPage() {
                                                         </button>
                                                     )}
 
+                                                    {canManage && (item.status === "borrowed" || item.status === "overdue") && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={actionLoading === item._id}
+                                                            onClick={() => openReportModal(item._id, item.bookId?.title || "Sách")}
+                                                            className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 text-xs text-orange-200 hover:bg-orange-500/20 disabled:opacity-60"
+                                                        >
+                                                            Báo lỗi
+                                                        </button>
+                                                    )}
+
                                                     {/* Fine payment for users is processed via VNPay only. Librarian/admin only monitor status. */}
 
                                                     {!canViewAll && item.status === "pending" && (
@@ -823,6 +896,80 @@ export default function BorrowingsPage() {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+                {/* Modal Báo mất / hỏng sách */}
+                {reportModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+                        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-lg font-semibold text-white">
+                                    Báo cáo Sách Mất / Hỏng
+                                </h2>
+                                <button
+                                    type="button"
+                                    onClick={closeReportModal}
+                                    disabled={reportSubmitting}
+                                    className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <p className="mb-4 text-sm text-slate-300">
+                                Đang báo cáo cho sách: <span className="font-semibold text-white">{reportBookTitle}</span>
+                            </p>
+
+                            <div className="space-y-4">
+                                {reportError && (
+                                    <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                                        {reportError}
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-slate-300">Tình trạng</label>
+                                    <select
+                                        value={reportStatus}
+                                        onChange={(e) => setReportStatus(e.target.value as "lost" | "damaged")}
+                                        className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                    >
+                                        <option value="lost">Mất sách (Phạt x3 giá sách)</option>
+                                        <option value="damaged">Hỏng sách (Phạt x2 giá sách)</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="mb-1 block text-xs font-semibold text-slate-300">Ghi chú thêm</label>
+                                    <textarea
+                                        value={reportNotes}
+                                        onChange={(e) => setReportNotes(e.target.value)}
+                                        rows={3}
+                                        className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                        placeholder="Mô tả chi tiết tình trạng hoặc thỏa thuận với người dùng..."
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={closeReportModal}
+                                        disabled={reportSubmitting}
+                                        className="rounded-lg border border-slate-600/50 bg-slate-700/40 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700/60 disabled:opacity-60"
+                                    >
+                                        Hủy
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void submitReportIssue()}
+                                        disabled={reportSubmitting}
+                                        className="rounded-lg border border-orange-500/30 bg-orange-500/10 px-4 py-2 text-xs font-semibold text-orange-200 hover:bg-orange-500/20 disabled:opacity-60"
+                                    >
+                                        {reportSubmitting ? "Đang xử lý..." : "Xác nhận báo cáo"}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

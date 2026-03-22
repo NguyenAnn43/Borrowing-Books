@@ -78,7 +78,7 @@ export interface IBorrowing {
     dueDate: string;
     returnDate?: string;
     actualReturnDate?: string;
-    status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";
+    status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | "lost" | "damaged";
     fineAmount: number;
     isFined: boolean;
     finePaid?: boolean;

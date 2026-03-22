@@ -13,6 +13,8 @@ const {
     mockUserFindById,
     mockSession,
     mockDecrement,
+    mockBookFindByIdAndUpdate,
+    mockUserFindByIdAndUpdate,
 } = vi.hoisted(() => ({
     mockBorrowingFindById: vi.fn(),
     mockBorrowingFindOne: vi.fn(),
@@ -29,6 +31,8 @@ const {
         endSession: vi.fn(),
     },
     mockDecrement: vi.fn(),
+    mockBookFindByIdAndUpdate: vi.fn(),
+    mockUserFindByIdAndUpdate: vi.fn(),
 }));
 
 vi.mock('mongoose', async (importOriginal) => {
@@ -36,6 +40,10 @@ vi.mock('mongoose', async (importOriginal) => {
     return {
         ...actual,
         startSession: vi.fn().mockResolvedValue(mockSession),
+        default: {
+            ...actual,
+            startSession: vi.fn().mockResolvedValue(mockSession),
+        }
     };
 });
 
@@ -49,9 +57,11 @@ vi.mock('../models', () => ({
     },
     Book: {
         findById: mockBookFindById,
+        findByIdAndUpdate: mockBookFindByIdAndUpdate,
     },
     User: {
         findById: mockUserFindById,
+        findByIdAndUpdate: mockUserFindByIdAndUpdate,
     },
 }));
 
@@ -265,5 +275,96 @@ describe('borrowingService.payFine', () => {
 
         await expect(borrowingService.payFine(borrowing._id!.toString()))
             .rejects.toMatchObject({ statusCode: 400, code: 'FINE_ALREADY_PAID' });
+    });
+});
+
+describe('borrowingService.reportLostOrDamaged', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('reports a book as lost and calculates penalty correctly', async () => {
+        const userId = new Types.ObjectId();
+        const bookId = new Types.ObjectId();
+        const libraryId = new Types.ObjectId();
+        
+        const book = makeBook({ _id: bookId, price: 100000, title: 'Lost Book', totalCopies: 5 });
+        const borrowing = makeBorrowing({ 
+            userId, 
+            libraryId, 
+            status: BORROWING_STATUS.BORROWED, 
+            fineAmount: 0,
+            bookId: book as any
+        });
+        
+        const populateMock = vi.fn().mockReturnValue({
+            session: vi.fn().mockResolvedValue(borrowing)
+        });
+        mockBorrowingFindById.mockReturnValue({ populate: populateMock });
+        
+        const requestingAdmin = makeUser({ role: 'admin' }) as IUser;
+
+        await borrowingService.reportLostOrDamaged(borrowing._id!.toString(), requestingAdmin, 'lost', 'User lost it');
+
+        expect(borrowing.status).toBe(BORROWING_STATUS.LOST);
+        expect(borrowing.fineAmount).toBe(300000); // 100000 * 3
+        expect(borrowing.isFined).toBe(true);
+        expect(borrowing.notes).toContain('[LOST]: User lost it');
+        expect(mockUserFindByIdAndUpdate).toHaveBeenCalledWith(userId, { isFined: true }, expect.any(Object));
+        expect(mockBookFindByIdAndUpdate).toHaveBeenCalledWith(book._id, { $inc: { totalCopies: -1 } }, expect.any(Object));
+        expect(mockBorrowingSave).toHaveBeenCalled();
+    });
+
+    it('reports a book as damaged and calculates penalty correctly', async () => {
+        const book = makeBook({ price: 100000, totalCopies: 5 });
+        const borrowing = makeBorrowing({ status: BORROWING_STATUS.BORROWED, bookId: book as any });
+        
+        mockBorrowingFindById.mockReturnValue({
+            populate: vi.fn().mockReturnValue({ session: vi.fn().mockResolvedValue(borrowing) })
+        });
+        
+        const requestingAdmin = makeUser({ role: 'admin' }) as IUser;
+
+        await borrowingService.reportLostOrDamaged(borrowing._id!.toString(), requestingAdmin, 'damaged');
+
+        expect(borrowing.status).toBe(BORROWING_STATUS.DAMAGED);
+        expect(borrowing.fineAmount).toBe(200000); // 100000 * 2
+    });
+
+    it('throws FORBIDDEN when librarian acts on another library', async () => {
+        const borrowing = makeBorrowing({ libraryId: new Types.ObjectId(), status: BORROWING_STATUS.BORROWED });
+        mockBorrowingFindById.mockReturnValue({
+            populate: vi.fn().mockReturnValue({ session: vi.fn().mockResolvedValue(borrowing) })
+        });
+        
+        const requestingLibrarian = makeUser({ role: 'librarian', libraryId: new Types.ObjectId() }) as IUser;
+
+        await expect(
+            borrowingService.reportLostOrDamaged(borrowing._id!.toString(), requestingLibrarian, 'lost')
+        ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    });
+
+    it('throws INVALID_STATUS when borrowing is already returned', async () => {
+        const borrowing = makeBorrowing({ status: BORROWING_STATUS.RETURNED });
+        mockBorrowingFindById.mockReturnValue({
+            populate: vi.fn().mockReturnValue({ session: vi.fn().mockResolvedValue(borrowing) })
+        });
+        
+        const requestingAdmin = makeUser({ role: 'admin' }) as IUser;
+
+        await expect(
+            borrowingService.reportLostOrDamaged(borrowing._id!.toString(), requestingAdmin, 'lost')
+        ).rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATUS' });
+    });
+
+    it('throws ALREADY_REPORTED when borrowing is already lost', async () => {
+        const borrowing = makeBorrowing({ status: BORROWING_STATUS.LOST });
+        mockBorrowingFindById.mockReturnValue({
+            populate: vi.fn().mockReturnValue({ session: vi.fn().mockResolvedValue(borrowing) })
+        });
+        
+        const requestingAdmin = makeUser({ role: 'admin' }) as IUser;
+
+        await expect(
+            borrowingService.reportLostOrDamaged(borrowing._id!.toString(), requestingAdmin, 'lost')
+        ).rejects.toMatchObject({ statusCode: 400, code: 'ALREADY_REPORTED' });
     });
 });

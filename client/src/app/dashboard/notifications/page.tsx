@@ -34,9 +34,8 @@ export default function NotificationsPage() {
             setLoading(true);
             setError(null);
             try {
-                const currentPage = p || page;
                 const result = await notificationService.getMyNotifications({
-                    page: currentPage,
+                    page,
                     limit,
                     unreadOnly,
                 });
