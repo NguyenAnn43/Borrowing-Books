@@ -37,7 +37,7 @@ router.put(
 router.delete(
     '/books/:reviewId',
     protect,
-    authorize(ROLES.USER),
+    authorize(ROLES.USER, ROLES.ADMIN),
     validate(deleteBookReviewSchema),
     reviewController.deleteBookReview
 );
@@ -60,7 +60,7 @@ router.put(
 router.delete(
     '/libraries/:reviewId',
     protect,
-    authorize(ROLES.USER),
+    authorize(ROLES.USER, ROLES.ADMIN),
     validate(deleteLibraryReviewSchema),
     reviewController.deleteLibraryReview
 );

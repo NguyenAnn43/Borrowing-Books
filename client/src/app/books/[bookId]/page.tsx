@@ -46,7 +46,9 @@ export default function BookDetailPage() {
     setReviewsLoading(true);
     setReviewsError("");
     try {
-      const reviewsResult = await reviewService.getBookReviews(targetBookId, { page: 1, limit: 20 });
+      // Admin and Librarian can see hidden reviews
+      const includeHidden = user?.role === "admin" || user?.role === "librarian";
+      const reviewsResult = await reviewService.getBookReviews(targetBookId, { page: 1, limit: 20, includeHidden });
       setReviews(reviewsResult.reviews);
 
       if (user?._id) {
