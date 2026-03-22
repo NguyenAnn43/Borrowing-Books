@@ -18,7 +18,6 @@ export function useSearch(options: UseSearchOptions = {}) {
 
   // Debounce search term
   useEffect(() => {
-    setIsSearching(true);
     const timer = setTimeout(() => {
       setDebouncedTerm(searchTerm);
       setIsSearching(false);

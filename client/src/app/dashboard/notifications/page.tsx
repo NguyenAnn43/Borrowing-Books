@@ -46,11 +46,11 @@ export default function NotificationsPage() {
     useEffect(() => {
         void fetchNotifications(1);
         goToPage(1);
-    }, [unreadOnly]);
+    }, [unreadOnly, fetchNotifications, goToPage]);
 
     useEffect(() => {
         void fetchNotifications();
-    }, [page]);
+    }, [page, fetchNotifications]);
 
     const handleMarkAsRead = async (id: string) => {
         setActionLoading(true);
