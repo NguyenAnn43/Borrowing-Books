@@ -14,7 +14,7 @@ import { useAuthStore } from "@/stores/authStore";
 import type { IBook, IBookReview } from "@/types";
 
 export default function BookDetailPage() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, getCurrentUser } = useAuthStore();
   const params = useParams<{ bookId: string }>();
   const bookId = useMemo(() => params?.bookId ?? "", [params?.bookId]);
 
@@ -38,11 +38,17 @@ export default function BookDetailPage() {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [wishlistMessage, setWishlistMessage] = useState("");
 
+  useEffect(() => {
+    void getCurrentUser();
+  }, [getCurrentUser]);
+
   const loadReviews = async (targetBookId: string) => {
     setReviewsLoading(true);
     setReviewsError("");
     try {
-      const reviewsResult = await reviewService.getBookReviews(targetBookId, { page: 1, limit: 20 });
+      // Admin and Librarian can see hidden reviews
+      const includeHidden = user?.role === "admin" || user?.role === "librarian";
+      const reviewsResult = await reviewService.getBookReviews(targetBookId, { page: 1, limit: 20, includeHidden });
       setReviews(reviewsResult.reviews);
 
       if (user?._id) {
@@ -138,7 +144,7 @@ export default function BookDetailPage() {
     };
 
     void fetchBookDetail();
-  }, [bookId]);
+  }, [bookId, isAuthenticated, user?._id]);
 
   const handleReserve = async () => {
     if (!book) return;

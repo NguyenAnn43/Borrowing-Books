@@ -166,14 +166,27 @@ export const getBookReviews = async (
     params: GetReviewListQuery,
     requestingUser?: IUser
 ): Promise<ReviewListResult<IBookReview>> => {
-    const includeHidden = requestingUser?.role === ROLES.ADMIN && params.includeHidden === true;
+    const isAdmin = requestingUser?.role === ROLES.ADMIN;
+    const isLibrarian = requestingUser?.role === ROLES.LIBRARIAN;
     const page = params.page || PAGINATION.DEFAULT_PAGE;
     const limit = params.limit || PAGINATION.DEFAULT_LIMIT;
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
     const skip = (page - 1) * actualLimit;
 
     const query: Record<string, unknown> = { bookId };
-    if (!includeHidden) {
+
+    // Admin can see all hidden reviews.
+    // Librarian can see hidden reviews for books under their own library.
+    if (params.includeHidden === true) {
+        if (isAdmin) {
+            // Admin sees all hidden reviews — no isHidden filter
+        } else if (isLibrarian && requestingUser?.libraryId) {
+            // Librarian only sees hidden reviews for their own library's books
+            query.libraryId = requestingUser.libraryId;
+        } else {
+            query.isHidden = false;
+        }
+    } else {
         query.isHidden = false;
     }
 
@@ -246,7 +259,8 @@ export const deleteBookReview = async (reviewId: string, user: IUser): Promise<v
         throw new AppError('Review not found', 404, 'BOOK_REVIEW_NOT_FOUND');
     }
 
-    if (toId(review.userId) !== user._id.toString()) {
+    // Admin can delete any review; regular users can only delete their own
+    if (user.role !== ROLES.ADMIN && toId(review.userId) !== user._id.toString()) {
         throw new AppError('You can only delete your own review', 403, 'FORBIDDEN');
     }
 
@@ -258,14 +272,26 @@ export const getLibraryReviews = async (
     params: GetReviewListQuery,
     requestingUser?: IUser
 ): Promise<ReviewListResult<ILibraryReview>> => {
-    const includeHidden = requestingUser?.role === ROLES.ADMIN && params.includeHidden === true;
+    const isAdmin = requestingUser?.role === ROLES.ADMIN;
+    const isLibrarian = requestingUser?.role === ROLES.LIBRARIAN;
     const page = params.page || PAGINATION.DEFAULT_PAGE;
     const limit = params.limit || PAGINATION.DEFAULT_LIMIT;
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
     const skip = (page - 1) * actualLimit;
 
     const query: Record<string, unknown> = { libraryId };
-    if (!includeHidden) {
+
+    // Admin can see all hidden reviews.
+    // Librarian can see hidden reviews only for their own library.
+    if (params.includeHidden === true) {
+        if (isAdmin) {
+            // Admin sees all — no isHidden filter
+        } else if (isLibrarian && requestingUser?.libraryId?.toString() === libraryId) {
+            // Librarian viewing their own library — allow seeing hidden reviews
+        } else {
+            query.isHidden = false;
+        }
+    } else {
         query.isHidden = false;
     }
 
@@ -337,7 +363,8 @@ export const deleteLibraryReview = async (reviewId: string, user: IUser): Promis
         throw new AppError('Review not found', 404, 'LIBRARY_REVIEW_NOT_FOUND');
     }
 
-    if (toId(review.userId) !== user._id.toString()) {
+    // Admin can delete any review; regular users can only delete their own
+    if (user.role !== ROLES.ADMIN && toId(review.userId) !== user._id.toString()) {
         throw new AppError('You can only delete your own review', 403, 'FORBIDDEN');
     }
 
