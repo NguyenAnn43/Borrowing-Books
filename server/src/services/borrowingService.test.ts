@@ -4,25 +4,32 @@ import { Types } from 'mongoose';
 // ── Mock models before importing the service ────────────────────────────────
 const {
     mockBorrowingFindById,
+    mockBorrowingFind,
     mockBorrowingFindOne,
     mockBorrowingCountDocuments,
     mockBorrowingCreate,
     mockBorrowingUpdateMany,
     mockBorrowingSave,
+    mockBookFind,
     mockBookFindById,
+    mockUserFind,
     mockUserFindById,
     mockSession,
     mockDecrement,
+    mockIncrement,
     mockBookFindByIdAndUpdate,
     mockUserFindByIdAndUpdate,
 } = vi.hoisted(() => ({
     mockBorrowingFindById: vi.fn(),
+    mockBorrowingFind: vi.fn(),
     mockBorrowingFindOne: vi.fn(),
     mockBorrowingCountDocuments: vi.fn(),
     mockBorrowingCreate: vi.fn(),
     mockBorrowingUpdateMany: vi.fn(),
     mockBorrowingSave: vi.fn(),
+    mockBookFind: vi.fn(),
     mockBookFindById: vi.fn(),
+    mockUserFind: vi.fn(),
     mockUserFindById: vi.fn(),
     mockSession: {
         startTransaction: vi.fn(),
@@ -31,6 +38,7 @@ const {
         endSession: vi.fn(),
     },
     mockDecrement: vi.fn(),
+    mockIncrement: vi.fn(),
     mockBookFindByIdAndUpdate: vi.fn(),
     mockUserFindByIdAndUpdate: vi.fn(),
 }));
@@ -50,16 +58,19 @@ vi.mock('mongoose', async (importOriginal) => {
 vi.mock('../models', () => ({
     Borrowing: {
         findById: mockBorrowingFindById,
+        find: mockBorrowingFind,
         findOne: mockBorrowingFindOne,
         countDocuments: mockBorrowingCountDocuments,
         create: mockBorrowingCreate,
         updateMany: mockBorrowingUpdateMany,
     },
     Book: {
+        find: mockBookFind,
         findById: mockBookFindById,
         findByIdAndUpdate: mockBookFindByIdAndUpdate,
     },
     User: {
+        find: mockUserFind,
         findById: mockUserFindById,
         findByIdAndUpdate: mockUserFindByIdAndUpdate,
     },
@@ -67,11 +78,15 @@ vi.mock('../models', () => ({
 
 vi.mock('./bookService', () => ({
     decrementAvailabilityAtomic: mockDecrement,
-    incrementAvailabilityAtomic: vi.fn(),
+    incrementAvailabilityAtomic: mockIncrement,
 }));
 
 vi.mock('./notificationService', () => ({
     create: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock('./reservationService', () => ({
+    autoFulfillPendingReservation: vi.fn().mockResolvedValue(null),
 }));
 
 // Import AFTER mocks
@@ -276,6 +291,26 @@ describe('borrowingService.payFine', () => {
         await expect(borrowingService.payFine(borrowing._id!.toString()))
             .rejects.toMatchObject({ statusCode: 400, code: 'FINE_ALREADY_PAID' });
     });
+
+    it('allows receiving library librarian to confirm fine for cross-library return', async () => {
+        const homeLibraryId = new Types.ObjectId();
+        const receivingLibraryId = new Types.ObjectId();
+        const borrowing = makeBorrowing({
+            libraryId: homeLibraryId,
+            returnHandledLibraryId: receivingLibraryId as any,
+            status: BORROWING_STATUS.RETURN_TRANSIT,
+            isFined: true,
+            finePaid: false,
+            fineAmount: 50000,
+        });
+        mockBorrowingFindById.mockResolvedValue(borrowing);
+        mockBorrowingSave.mockResolvedValue(borrowing);
+
+        const receivingLibrarian = makeUser({ role: 'librarian', libraryId: receivingLibraryId }) as IUser;
+        await borrowingService.payFine(borrowing._id!.toString(), receivingLibrarian);
+
+        expect(borrowing.finePaid).toBe(true);
+    });
 });
 
 describe('borrowingService.reportLostOrDamaged', () => {
@@ -397,5 +432,145 @@ describe('borrowingService.reportLostOrDamaged', () => {
         await expect(
             borrowingService.reportLostOrDamaged(borrowing._id!.toString(), requestingAdmin, 'lost')
         ).rejects.toMatchObject({ statusCode: 400, code: 'ALREADY_REPORTED' });
+    });
+});
+
+describe('borrowingService.returnBook', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('rejects cross-library return on standard return route', async () => {
+        const homeLibraryId = new Types.ObjectId();
+        const receivingLibraryId = new Types.ObjectId();
+        const borrowing = makeBorrowing({
+            libraryId: homeLibraryId,
+            status: BORROWING_STATUS.BORROWED,
+            bookId: new Types.ObjectId(),
+        });
+        mockBorrowingFindById.mockReturnValue({
+            session: vi.fn().mockResolvedValue(borrowing)
+        });
+        mockBorrowingSave.mockResolvedValue(borrowing);
+
+        const receivingLibrarian = makeUser({ role: 'librarian', libraryId: receivingLibraryId }) as IUser;
+
+        await expect(
+            borrowingService.returnBook(borrowing._id!.toString(), receivingLibrarian)
+        ).rejects.toMatchObject({ statusCode: 403, code: 'FORBIDDEN' });
+    });
+});
+
+describe('borrowingService.receiveCrossLibraryReturn', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('marks borrowing as RETURN_TRANSIT and does not restore stock immediately', async () => {
+        const homeLibraryId = new Types.ObjectId();
+        const receivingLibraryId = new Types.ObjectId();
+        const borrowing = makeBorrowing({
+            libraryId: homeLibraryId,
+            status: BORROWING_STATUS.BORROWED,
+            bookId: new Types.ObjectId(),
+        });
+        mockBorrowingFindById.mockReturnValue({
+            session: vi.fn().mockResolvedValue(borrowing)
+        });
+        mockBorrowingSave.mockResolvedValue(borrowing);
+
+        const receivingLibrarian = makeUser({ role: 'librarian', libraryId: receivingLibraryId }) as IUser;
+
+        await borrowingService.receiveCrossLibraryReturn(borrowing._id!.toString(), receivingLibrarian);
+
+        expect(borrowing.status).toBe(BORROWING_STATUS.RETURN_TRANSIT);
+        expect(String(borrowing.returnHandledLibraryId)).toBe(receivingLibraryId.toString());
+        expect(mockIncrement).not.toHaveBeenCalled();
+    });
+});
+
+describe('borrowingService.receiveTransitReturn', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('finalizes inbound transit at home library and restores stock', async () => {
+        const homeLibraryId = new Types.ObjectId();
+        const bookId = new Types.ObjectId();
+        const borrowing = makeBorrowing({
+            libraryId: homeLibraryId,
+            bookId,
+            status: BORROWING_STATUS.RETURN_TRANSIT,
+            isFined: false,
+            fineAmount: 0,
+        });
+        mockBorrowingFindById.mockReturnValue({
+            session: vi.fn().mockResolvedValue(borrowing)
+        });
+        mockBorrowingSave.mockResolvedValue(borrowing);
+
+        const homeLibrarian = makeUser({ role: 'librarian', libraryId: homeLibraryId }) as IUser;
+
+        await borrowingService.receiveTransitReturn(borrowing._id!.toString(), homeLibrarian);
+
+        expect(borrowing.status).toBe(BORROWING_STATUS.RETURNED);
+        expect(borrowing.transitCompletedAt).toBeDefined();
+        expect(mockIncrement).toHaveBeenCalledWith(bookId.toString(), expect.anything());
+    });
+
+    it('marks as RETURNED when fine exists but has already been paid', async () => {
+        const homeLibraryId = new Types.ObjectId();
+        const borrowing = makeBorrowing({
+            libraryId: homeLibraryId,
+            status: BORROWING_STATUS.RETURN_TRANSIT,
+            isFined: true,
+            fineAmount: 50000,
+            finePaid: true,
+        });
+        mockBorrowingFindById.mockReturnValue({
+            session: vi.fn().mockResolvedValue(borrowing)
+        });
+        mockBorrowingSave.mockResolvedValue(borrowing);
+
+        const homeLibrarian = makeUser({ role: 'librarian', libraryId: homeLibraryId }) as IUser;
+        await borrowingService.receiveTransitReturn(borrowing._id!.toString(), homeLibrarian);
+
+        expect(borrowing.status).toBe(BORROWING_STATUS.RETURNED);
+    });
+});
+
+describe('borrowingService.lookupCrossLibraryReturnCandidates', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('throws NO_LIBRARY_ASSIGNED for librarian without library', async () => {
+        const librarian = makeUser({ role: 'librarian', libraryId: undefined }) as IUser;
+
+        await expect(
+            borrowingService.lookupCrossLibraryReturnCandidates({ q: 'harry', limit: 10 }, librarian)
+        ).rejects.toMatchObject({ statusCode: 403, code: 'NO_LIBRARY_ASSIGNED' });
+    });
+
+    it('returns candidates from other libraries only', async () => {
+        const librarianLibraryId = new Types.ObjectId();
+        const otherLibraryBorrowing = makeBorrowing({
+            status: BORROWING_STATUS.BORROWED,
+            libraryId: new Types.ObjectId(),
+        });
+
+        mockBookFind.mockImplementation(() => ({
+            select: vi.fn().mockResolvedValue([{ _id: new Types.ObjectId() }]),
+        }));
+        mockUserFind.mockImplementation(() => ({
+            select: vi.fn().mockResolvedValue([{ _id: new Types.ObjectId() }]),
+        }));
+        mockBorrowingFind.mockImplementation(() => ({
+            sort: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([otherLibraryBorrowing]),
+            }),
+        }));
+
+        const librarian = makeUser({ role: 'librarian', libraryId: librarianLibraryId }) as IUser;
+        const result = await borrowingService.lookupCrossLibraryReturnCandidates({ q: 'an', limit: 8 }, librarian);
+
+        expect(result).toHaveLength(1);
+        expect(mockBorrowingFind).toHaveBeenCalledWith(
+            expect.objectContaining({
+                libraryId: { $ne: librarianLibraryId },
+            })
+        );
     });
 });

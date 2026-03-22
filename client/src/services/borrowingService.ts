@@ -11,9 +11,14 @@ export interface GetBorrowingsParams {
     q?: string;
     page?: number;
     limit?: number;
-    status?: "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | "lost" | "damaged";
+    status?: "pending" | "borrowed" | "returned" | "overdue" | "return_transit" | "cancelled" | "lost" | "damaged";
     libraryId?: string;
     userId?: string;
+}
+
+export interface CrossReturnLookupParams {
+    q: string;
+    limit?: number;
 }
 
 export const borrowingService = {
@@ -48,6 +53,14 @@ export const borrowingService = {
     },
 
     /**
+     * Lookup active borrowings from other libraries for cross-library return handling
+     */
+    lookupCrossReturnCandidates: async (params: CrossReturnLookupParams): Promise<IBorrowing[]> => {
+        const response = await api.get<ApiResponse<IBorrowing[]>>("/borrowings/cross-return/candidates", { params });
+        return response.data.data;
+    },
+
+    /**
      * Create borrowing request
      */
     createBorrowing: async (data: CreateBorrowingData): Promise<IBorrowing> => {
@@ -76,6 +89,22 @@ export const borrowingService = {
      */
     returnBook: async (id: string): Promise<IBorrowing> => {
         const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/return`);
+        return response.data.data;
+    },
+
+    /**
+     * Receiving librarian handles cross-library return intake
+     */
+    receiveCrossLibraryReturn: async (id: string): Promise<IBorrowing> => {
+        const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/receive-cross-return`);
+        return response.data.data;
+    },
+
+    /**
+     * Home library confirms receiving an inbound cross-library return
+     */
+    receiveTransitReturn: async (id: string): Promise<IBorrowing> => {
+        const response = await api.put<ApiResponse<IBorrowing>>(`/borrowings/${id}/receive-transit`);
         return response.data.data;
     },
 

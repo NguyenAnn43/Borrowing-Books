@@ -77,7 +77,9 @@ export interface IBorrowing {
     borrowDate: string;
     dueDate: string;
     actualReturnDate?: string;
-    status: "pending" | "borrowed" | "returned" | "overdue" | "cancelled" | "lost" | "damaged";
+    returnHandledLibraryId?: Pick<ILibrary, "_id" | "name" | "code">;
+    transitCompletedAt?: string;
+    status: "pending" | "borrowed" | "returned" | "overdue" | "return_transit" | "cancelled" | "lost" | "damaged";
     fineAmount: number;
     isFined: boolean;
     finePaid?: boolean;

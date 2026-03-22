@@ -111,8 +111,12 @@ export const createVnpayFinePayment = async (
         throw new AppError('You are not authorized to pay this fine', 403, 'FORBIDDEN');
     }
 
-    if (!(borrowing.status === BORROWING_STATUS.OVERDUE || borrowing.status === BORROWING_STATUS.RETURNED)) {
-        throw new AppError('Fine payment is only allowed for overdue/returned borrowings', 400, 'INVALID_STATUS');
+    if (!(
+        borrowing.status === BORROWING_STATUS.OVERDUE ||
+        borrowing.status === BORROWING_STATUS.RETURNED ||
+        borrowing.status === BORROWING_STATUS.RETURN_TRANSIT
+    )) {
+        throw new AppError('Fine payment is only allowed for overdue/returned/return_transit borrowings', 400, 'INVALID_STATUS');
     }
 
     if (!borrowing.isFined || borrowing.fineAmount <= 0) {

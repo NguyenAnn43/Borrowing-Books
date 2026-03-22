@@ -28,6 +28,7 @@ export const BORROWING_STATUS = {
     BORROWED: 'borrowed',
     RETURNED: 'returned',
     OVERDUE: 'overdue',
+    RETURN_TRANSIT: 'return_transit',
     CANCELLED: 'cancelled',
     LOST: 'lost',
     DAMAGED: 'damaged',

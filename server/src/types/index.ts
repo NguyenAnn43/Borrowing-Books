@@ -84,7 +84,9 @@ export interface IBorrowing extends Document {
     borrowDate: Date;
     dueDate: Date;
     actualReturnDate?: Date;
-    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'cancelled' | 'lost' | 'damaged';
+    returnHandledLibraryId?: Types.ObjectId;
+    transitCompletedAt?: Date;
+    status: 'pending' | 'borrowed' | 'returned' | 'overdue' | 'return_transit' | 'cancelled' | 'lost' | 'damaged';
     fineAmount: number;
     isFined: boolean;
     /** Whether the fine has been paid by the user */

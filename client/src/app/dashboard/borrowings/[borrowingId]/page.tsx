@@ -14,7 +14,10 @@ const getStatusLabel = (status: IBorrowing["status"]): string => {
         borrowed: "Đang mượn",
         returned: "Đã trả",
         overdue: "Quá hạn",
+        return_transit: "Đang chuyển trả",
         cancelled: "Đã hủy",
+        lost: "Mất sách",
+        damaged: "Hỏng sách",
     };
 
     return statusMap[status];
@@ -26,7 +29,10 @@ const getStatusColor = (status: IBorrowing["status"]): string => {
         borrowed: "bg-indigo-500/20 border-indigo-500/40 text-indigo-200",
         returned: "bg-emerald-500/20 border-emerald-500/40 text-emerald-200",
         overdue: "bg-amber-500/20 border-amber-500/40 text-amber-200",
+        return_transit: "bg-cyan-500/20 border-cyan-500/40 text-cyan-200",
         cancelled: "bg-red-500/20 border-red-500/40 text-red-200",
+        lost: "bg-red-900/40 border-red-500/40 text-red-200",
+        damaged: "bg-orange-600/20 border-orange-500/40 text-orange-200",
     };
 
     return colorMap[status];
@@ -93,8 +99,8 @@ export default function BorrowingDetailPage() {
             <div className="p-8">
                 <div className="mb-6 flex items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Order Detail</h1>
-                        <p className="mt-1 text-sm text-slate-400">Chi tiết yêu cầu mượn sách và trạng thái xử lý.</p>
+                        <h1 className="text-2xl font-bold text-white">Chi tiết lượt mượn</h1>
+                        <p className="mt-1 text-sm text-slate-400">Theo dõi trạng thái mượn/trả, tiền phạt và luồng chuyển trả.</p>
                     </div>
                     <Link
                         href="/dashboard/borrowings"
@@ -162,6 +168,14 @@ export default function BorrowingDetailPage() {
                                         {borrowing.libraryId?.name || "-"}
                                         {borrowing.libraryId?.code ? ` (${borrowing.libraryId.code})` : ""}
                                     </p>
+                                    <p className="inline-flex items-center gap-2">
+                                        <Landmark className="h-4 w-4 text-cyan-300" />
+                                        Nơi nhận trả thực tế:
+                                        <span className="font-medium text-slate-100">
+                                            {borrowing.returnHandledLibraryId?.name || borrowing.libraryId?.name || "-"}
+                                        </span>
+                                        {borrowing.returnHandledLibraryId?.code ? ` (${borrowing.returnHandledLibraryId.code})` : ""}
+                                    </p>
                                 </div>
                             </div>
                         </section>
@@ -176,8 +190,32 @@ export default function BorrowingDetailPage() {
                                 <p>Ngày mượn: <span className="font-medium text-slate-100">{formatDateTime(borrowing.borrowDate)}</span></p>
                                 <p>Hạn trả: <span className="font-medium text-slate-100">{formatDateTime(borrowing.dueDate)}</span></p>
                                 <p>Ngày trả thực tế: <span className="font-medium text-slate-100">{formatDateTime(borrowing.actualReturnDate)}</span></p>
+                                <p>Hoàn tất chuyển về kho gốc: <span className="font-medium text-slate-100">{formatDateTime(borrowing.transitCompletedAt)}</span></p>
                             </div>
                         </section>
+
+                        {(borrowing.status === "return_transit" || borrowing.returnHandledLibraryId || borrowing.transitCompletedAt) && (
+                            <section className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-5">
+                                <h2 className="mb-3 text-base font-semibold text-cyan-100">Luồng trả chéo thư viện</h2>
+                                <div className="space-y-2 text-sm text-cyan-50">
+                                    <p>1. Bạn đọc trả sách tại thư viện nhận trả (không phải thư viện gốc).</p>
+                                    <p>2. Hệ thống chuyển đơn sang trạng thái &quot;Đang chuyển trả&quot;.</p>
+                                    <p>3. Thư viện gốc bấm &quot;Nhận về kho gốc&quot; để hoàn tất và cộng lại tồn kho.</p>
+                                    <p>
+                                        Thư viện nhận trả:{" "}
+                                        <span className="font-semibold">
+                                            {borrowing.returnHandledLibraryId?.name || "Chưa ghi nhận"}
+                                        </span>
+                                    </p>
+                                    <p>
+                                        Thời điểm hoàn tất nhập kho gốc:{" "}
+                                        <span className="font-semibold">
+                                            {formatDateTime(borrowing.transitCompletedAt)}
+                                        </span>
+                                    </p>
+                                </div>
+                            </section>
+                        )}
 
                         <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">

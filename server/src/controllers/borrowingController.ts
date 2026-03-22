@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { borrowingService } from '../services';
 import { asyncHandler } from '../utils';
 import { AuthRequest } from '../types';
-import { GetBorrowingsQuery } from '../validators/borrowingSchema';
+import { GetBorrowingsQuery, CrossReturnLookupQuery } from '../validators/borrowingSchema';
 
 /**
  * Get all borrowings (admin/librarian)
@@ -10,6 +10,17 @@ import { GetBorrowingsQuery } from '../validators/borrowingSchema';
 export const getBorrowings = asyncHandler(async (req: AuthRequest, res: Response) => {
     const result = await borrowingService.getBorrowings(req.query as unknown as GetBorrowingsQuery, req.user!);
     res.json({ success: true, data: result.borrowings, meta: result.pagination });
+});
+
+/**
+ * Lookup cross-library return candidates for librarians.
+ */
+export const lookupCrossLibraryReturnCandidates = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowings = await borrowingService.lookupCrossLibraryReturnCandidates(
+        req.query as unknown as CrossReturnLookupQuery,
+        req.user!
+    );
+    res.json({ success: true, data: borrowings });
 });
 
 /**
@@ -58,6 +69,22 @@ export const confirmPickup = asyncHandler(async (req: AuthRequest, res: Response
 export const returnBook = asyncHandler(async (req: AuthRequest, res: Response) => {
     const borrowing = await borrowingService.returnBook(req.params['id']!, req.user!);
     res.json({ success: true, data: borrowing, message: 'Book returned successfully' });
+});
+
+/**
+ * Receive a cross-library return at non-home library (librarian)
+ */
+export const receiveCrossLibraryReturn = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowing = await borrowingService.receiveCrossLibraryReturn(req.params['id']!, req.user!);
+    res.json({ success: true, data: borrowing, message: 'Cross-library return received successfully' });
+});
+
+/**
+ * Confirm receipt of cross-library return at home library (librarian/admin)
+ */
+export const receiveTransitReturn = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const borrowing = await borrowingService.receiveTransitReturn(req.params['id']!, req.user!);
+    res.json({ success: true, data: borrowing, message: 'Transit return received successfully' });
 });
 
 /**

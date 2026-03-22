@@ -11,7 +11,7 @@ import {
     BORROWING_STATUS, BORROWING_SETTINGS, PAGINATION, NOTIFICATION_TYPE,
 } from '../utils';
 import { IBorrowing, IBook, IUser, PaginationMeta } from '../types';
-import { GetBorrowingsQuery, CreateBorrowingInput, CreateBulkBorrowingInput } from '../validators/borrowingSchema';
+import { GetBorrowingsQuery, CreateBorrowingInput, CreateBulkBorrowingInput, CrossReturnLookupQuery } from '../validators/borrowingSchema';
 import { ROLES } from '../utils/constants';
 
 interface GetBorrowingsResult {
@@ -29,6 +29,8 @@ const toId = (field: Types.ObjectId | { _id: Types.ObjectId } | unknown): string
     }
     return String(field);
 };
+
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -58,22 +60,51 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
 
     // Add search by book title or user name
     if (q) {
-        const searchQuery = { $regex: q, $options: 'i' };
-        // Search in related collections
-        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
-        const bookIds = matchingBooks.map((b) => b._id);
-        if (bookIds.length > 0) {
-            query.bookId = { $in: bookIds };
-        } else {
-            // Also try text search in users
-            const matchingUsers = await User.find({ $text: { $search: q } }).select('_id');
-            if (matchingUsers.length > 0) {
-                query.userId = { $in: matchingUsers.map((u) => u._id) };
-            } else {
-                // If no matches, return empty result
-                return { borrowings: [], pagination: formatPagination(page, limit, 0) };
-            }
+        const normalizedQ = q.trim();
+        if (!normalizedQ) {
+            const [borrowings, total] = await Promise.all([
+                Borrowing.find(query)
+                    .skip((page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT))
+                    .limit(Math.min(limit, PAGINATION.MAX_LIMIT))
+                    .sort({ createdAt: -1 })
+                    .populate('bookId', 'title author')
+                    .populate('userId', 'fullName email')
+                    .populate('libraryId', 'name code') as Promise<IBorrowing[]>,
+                Borrowing.countDocuments(query),
+            ]);
+
+            const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
+            return { borrowings, pagination: formatPagination(page, actualLimit, total) };
         }
+        const isObjectIdQuery = Types.ObjectId.isValid(normalizedQ);
+        const safeRegex = { $regex: escapeRegex(normalizedQ), $options: 'i' };
+
+        const [matchingBooks, matchingUsers] = await Promise.all([
+            Book.find({ $or: [{ title: safeRegex }, { author: safeRegex }, { isbn: safeRegex }] }).select('_id'),
+            User.find({ $or: [{ fullName: safeRegex }, { email: safeRegex }] }).select('_id'),
+        ]);
+
+        const orConditions: Record<string, unknown>[] = [];
+
+        if (isObjectIdQuery) {
+            const objectId = new Types.ObjectId(normalizedQ);
+            orConditions.push({ _id: objectId });
+            orConditions.push({ bookId: objectId });
+            orConditions.push({ userId: objectId });
+        }
+
+        if (matchingBooks.length > 0) {
+            orConditions.push({ bookId: { $in: matchingBooks.map((book) => book._id) } });
+        }
+        if (matchingUsers.length > 0) {
+            orConditions.push({ userId: { $in: matchingUsers.map((user) => user._id) } });
+        }
+
+        if (orConditions.length === 0) {
+            return { borrowings: [], pagination: formatPagination(page, limit, 0) };
+        }
+
+        query.$or = orConditions;
     }
 
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
@@ -85,12 +116,68 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
             .limit(actualLimit)
             .sort({ createdAt: -1 })
             .populate('bookId', 'title author')
-            .populate('userId', 'name email')
-            .populate('libraryId', 'name') as Promise<IBorrowing[]>,
+            .populate('userId', 'fullName email')
+            .populate('libraryId', 'name code') as Promise<IBorrowing[]>,
         Borrowing.countDocuments(query),
     ]);
 
     return { borrowings, pagination: formatPagination(page, actualLimit, total) };
+};
+
+/**
+ * Search active borrowings from other libraries so a librarian can receive cross-library returns.
+ */
+export const lookupCrossLibraryReturnCandidates = async (
+    params: CrossReturnLookupQuery,
+    requestingUser: IUser
+): Promise<IBorrowing[]> => {
+    if (requestingUser.role !== ROLES.LIBRARIAN) {
+        throw new AppError('Only librarians can lookup cross-library returns', 403, 'FORBIDDEN');
+    }
+    if (!requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
+    const q = params.q.trim();
+    const queryLimit = Number.isFinite(params.limit) ? params.limit : PAGINATION.DEFAULT_LIMIT;
+    const limit = Math.max(1, Math.min(queryLimit, 20));
+
+    const baseQuery: Record<string, unknown> = {
+        status: { $in: [BORROWING_STATUS.BORROWED, BORROWING_STATUS.OVERDUE] },
+        libraryId: { $ne: requestingUser.libraryId },
+    };
+
+    const queryParts: Record<string, unknown>[] = [];
+
+    if (Types.ObjectId.isValid(q)) {
+        queryParts.push({ _id: new Types.ObjectId(q) });
+    }
+
+    const safeRegex = { $regex: escapeRegex(q), $options: 'i' };
+    const [matchingBooks, matchingUsers] = await Promise.all([
+        Book.find({ $or: [{ title: safeRegex }, { author: safeRegex }, { isbn: safeRegex }] }).select('_id'),
+        User.find({ $or: [{ fullName: safeRegex }, { email: safeRegex }] }).select('_id'),
+    ]);
+
+    if (matchingBooks.length > 0) {
+        queryParts.push({ bookId: { $in: matchingBooks.map((book) => book._id) } });
+    }
+    if (matchingUsers.length > 0) {
+        queryParts.push({ userId: { $in: matchingUsers.map((user) => user._id) } });
+    }
+
+    if (queryParts.length === 0) {
+        return [];
+    }
+
+    const borrowings = await Borrowing.find({
+        ...baseQuery,
+        $or: queryParts,
+    })
+        .sort({ dueDate: 1, createdAt: -1 })
+        .limit(limit) as IBorrowing[];
+
+    return borrowings;
 };
 
 /**
@@ -375,10 +462,14 @@ export const returnBook = async (id: string, requestingUser: IUser): Promise<IBo
         const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
         if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
-        // Librarians can only manage borrowings for their own library
+        // Standard return route is for home library only.
         if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
             if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
-                throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
+                throw new AppError(
+                    'Cross-library return must be handled via receiveCrossLibraryReturn',
+                    403,
+                    'FORBIDDEN'
+                );
             }
         }
 
@@ -392,23 +483,21 @@ export const returnBook = async (id: string, requestingUser: IUser): Promise<IBo
             borrowing.isFined = true;
             // Update user.isFined flag when book is returned late
             await User.findByIdAndUpdate(borrowing.userId, { isFined: true }, { session });
-            // Keep status as OVERDUE if book is returned late
             borrowing.status = BORROWING_STATUS.OVERDUE;
         } else {
-            // Set status to RETURNED if book is returned on time
             borrowing.status = BORROWING_STATUS.RETURNED;
         }
 
         const now = new Date();
         borrowing.actualReturnDate = now;
+        borrowing.returnHandledLibraryId = undefined;
+        borrowing.transitCompletedAt = undefined;
         await borrowing.save({ session });
 
-        // [P0] Atomic increment — same transaction
         await bookService.incrementAvailabilityAtomic(toId(borrowing.bookId), session);
 
         await session.commitTransaction();
 
-        // Check for pending reservations and auto-fulfill the earliest one
         try {
             await reservationService.autoFulfillPendingReservation(toId(borrowing.bookId));
         } catch (reservationErr) {
@@ -416,14 +505,140 @@ export const returnBook = async (id: string, requestingUser: IUser): Promise<IBo
             logger.error('[returnBook] Failed to auto-fulfill pending reservation', reservationErr);
         }
 
-        // Notification outside transaction
         let message = 'Bạn đã trả sách thành công.';
-        if (borrowing.isFined) {
+        if (borrowing.isFined && borrowing.fineAmount > 0) {
             message += ` Tiền phạt: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND. Vui lòng thanh toán tại thư viện.`;
         }
         await notificationService.create({
             userId: toId(borrowing.userId),
             title: 'Trả sách thành công',
+            message,
+            type: NOTIFICATION_TYPE.BORROWING,
+        });
+
+        return borrowing;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
+    }
+};
+
+/**
+ * Receive a cross-library return at non-home library.
+ * Book enters transit and stock stays unchanged until home library confirms.
+ */
+export const receiveCrossLibraryReturn = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
+        if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
+
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+            if (toId(borrowing.libraryId) === toId(requestingUser.libraryId)) {
+                throw new AppError('Use returnBook for same-library return', 400, 'INVALID_RETURN_FLOW');
+            }
+        }
+
+        if (borrowing.status !== BORROWING_STATUS.BORROWED && borrowing.status !== BORROWING_STATUS.OVERDUE) {
+            throw new AppError('Invalid borrowing status', 400, 'INVALID_STATUS');
+        }
+
+        const overdueDays = calculateOverdueDays(borrowing.dueDate);
+        if (overdueDays > 0) {
+            borrowing.fineAmount = calculateFine(overdueDays, BORROWING_SETTINGS.OVERDUE_FINE_PER_DAY);
+            borrowing.isFined = true;
+            await User.findByIdAndUpdate(borrowing.userId, { isFined: true }, { session });
+        }
+
+        const now = new Date();
+        borrowing.status = BORROWING_STATUS.RETURN_TRANSIT;
+        borrowing.actualReturnDate = now;
+        borrowing.returnHandledLibraryId = requestingUser.libraryId;
+        borrowing.transitCompletedAt = undefined;
+        await borrowing.save({ session });
+
+        await session.commitTransaction();
+
+        let message = 'Bạn đã trả sách tại thư viện khác. Sách đang được chuyển về thư viện gốc.';
+        if (borrowing.isFined && borrowing.fineAmount > 0) {
+            message += ` Tiền phạt: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND.`;
+        }
+        await notificationService.create({
+            userId: toId(borrowing.userId),
+            title: 'Đã tiếp nhận trả chéo',
+            message,
+            type: NOTIFICATION_TYPE.BORROWING,
+        });
+
+        return borrowing;
+    } catch (err) {
+        await session.abortTransaction();
+        throw err;
+    } finally {
+        session.endSession();
+    }
+};
+
+/**
+ * Confirm receipt of a cross-library return at the home library.
+ * This finalizes return transit and restores available stock.
+ */
+export const receiveTransitReturn = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const borrowing = await Borrowing.findById(id).session(session) as IBorrowing | null;
+        if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
+
+        if (borrowing.status !== BORROWING_STATUS.RETURN_TRANSIT) {
+            throw new AppError('Borrowing is not in return transit state', 400, 'INVALID_STATUS');
+        }
+
+        // Only home library (or admin) can finalize inbound transit.
+        if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+            if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+                throw new AppError('You are not authorized to receive this transit return', 403, 'FORBIDDEN');
+            }
+        }
+
+        const now = new Date();
+        borrowing.transitCompletedAt = now;
+        borrowing.status =
+            borrowing.isFined && borrowing.fineAmount > 0 && !borrowing.finePaid
+                ? BORROWING_STATUS.OVERDUE
+                : BORROWING_STATUS.RETURNED;
+        await borrowing.save({ session });
+
+        await bookService.incrementAvailabilityAtomic(toId(borrowing.bookId), session);
+
+        await session.commitTransaction();
+
+        try {
+            await reservationService.autoFulfillPendingReservation(toId(borrowing.bookId));
+        } catch (reservationErr) {
+            logger.error('[receiveTransitReturn] Failed to auto-fulfill pending reservation', reservationErr);
+        }
+
+        let message = 'Sách đã được thư viện gốc nhận lại thành công.';
+        if (borrowing.isFined && borrowing.fineAmount > 0) {
+            message += ` Tiền phạt hiện tại: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND.`;
+        }
+        await notificationService.create({
+            userId: toId(borrowing.userId),
+            title: 'Hoàn tất chuyển trả sách',
             message,
             type: NOTIFICATION_TYPE.BORROWING,
         });
@@ -520,7 +735,11 @@ export const payFine = async (id: string, requestingUser?: IUser): Promise<IBorr
 
     // Librarians can only manage borrowings for their own library
     if (requestingUser?.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
-        if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
+        const canManageAtHomeLibrary = toId(borrowing.libraryId) === toId(requestingUser.libraryId);
+        const canManageAtReceivingLibrary = borrowing.returnHandledLibraryId
+            && toId(borrowing.returnHandledLibraryId) === toId(requestingUser.libraryId);
+
+        if (!canManageAtHomeLibrary && !canManageAtReceivingLibrary) {
             throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
         }
     }

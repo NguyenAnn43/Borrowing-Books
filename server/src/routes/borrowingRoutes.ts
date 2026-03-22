@@ -1,7 +1,14 @@
 import { Router, IRouter } from 'express';
 import { borrowingController } from '../controllers';
 import { protect, authorize, validate } from '../middlewares';
-import { createBorrowingSchema, createBulkBorrowingSchema, updateBorrowingSchema, getBorrowingsSchema, reportIssueSchema } from '../validators';
+import {
+    createBorrowingSchema,
+    createBulkBorrowingSchema,
+    updateBorrowingSchema,
+    getBorrowingsSchema,
+    crossReturnLookupSchema,
+    reportIssueSchema,
+} from '../validators';
 import { ROLES } from '../utils';
 
 const router: IRouter = Router();
@@ -56,6 +63,15 @@ router.get(
     borrowingController.getBorrowings
 );
 
+/** GET /borrowings/cross-return/candidates — librarian lookup active borrowings at other libraries */
+router.get(
+    '/cross-return/candidates',
+    protect,
+    authorize(ROLES.LIBRARIAN),
+    validate(crossReturnLookupSchema),
+    borrowingController.lookupCrossLibraryReturnCandidates
+);
+
 /** GET /borrowings/:id — owner | librarian | admin */
 router.get(
     '/:id',
@@ -80,6 +96,24 @@ router.put(
     authorize(ROLES.LIBRARIAN),
     validate(updateBorrowingSchema),
     borrowingController.returnBook
+);
+
+/** PUT /borrowings/:id/receive-cross-return — receiving librarian handles cross-library return */
+router.put(
+    '/:id/receive-cross-return',
+    protect,
+    authorize(ROLES.LIBRARIAN),
+    validate(updateBorrowingSchema),
+    borrowingController.receiveCrossLibraryReturn
+);
+
+/** PUT /borrowings/:id/receive-transit — home librarian confirms inbound cross-library return */
+router.put(
+    '/:id/receive-transit',
+    protect,
+    authorize(ROLES.LIBRARIAN),
+    validate(updateBorrowingSchema),
+    borrowingController.receiveTransitReturn
 );
 
 /** PUT /borrowings/:id/pay-fine — librarian marks fine as paid */

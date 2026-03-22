@@ -25,10 +25,17 @@ export const updateBorrowingSchema = {
 export const getBorrowingsSchema = {
     query: z.object({
         q: z.string().optional(),
-        status: z.enum(['pending', 'borrowed', 'returned', 'overdue', 'cancelled', 'lost', 'damaged']).optional(),
+        status: z.enum(['pending', 'borrowed', 'returned', 'overdue', 'return_transit', 'cancelled', 'lost', 'damaged']).optional(),
         libraryId: z.string().optional(),
         userId: z.string().optional(),
         page: z.string().transform(Number).default('1'),
+        limit: z.string().transform(Number).default('10'),
+    }),
+};
+
+export const crossReturnLookupSchema = {
+    query: z.object({
+        q: z.string().trim().min(2, 'Search query must be at least 2 characters'),
         limit: z.string().transform(Number).default('10'),
     }),
 };
@@ -48,3 +55,4 @@ export type CreateBorrowingInput = z.infer<typeof createBorrowingSchema.body>;
 export type CreateBulkBorrowingInput = z.infer<typeof createBulkBorrowingSchema.body>;
 export type ReportIssueInput = z.infer<typeof reportIssueSchema.body>;
 export type GetBorrowingsQuery = z.infer<typeof getBorrowingsSchema.query>;
+export type CrossReturnLookupQuery = z.infer<typeof crossReturnLookupSchema.query>;
