@@ -26,6 +26,7 @@ export const getBorrowingsSchema = {
     query: z.object({
         q: z.string().optional(),
         status: z.enum(['pending', 'borrowed', 'returned', 'overdue', 'return_transit', 'cancelled', 'lost', 'damaged']).optional(),
+        finePaid: z.enum(['true', 'false']).optional(),
         libraryId: z.string().optional(),
         userId: z.string().optional(),
         page: z.string().transform(Number).default('1'),

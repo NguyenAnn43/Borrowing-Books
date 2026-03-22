@@ -214,7 +214,8 @@ export interface IPayment extends Document {
     _id: Types.ObjectId;
     userId: Types.ObjectId;
     borrowingId: Types.ObjectId;
-    provider: 'vnpay';
+    provider: 'vnpay' | 'cash';
+    paidLibraryId?: Types.ObjectId;
     status: 'pending' | 'success' | 'failed';
     amount: number;
     txnRef: string;

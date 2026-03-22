@@ -1,162 +1,271 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookCopy, CheckCircle2, BookOpen, Clock, Loader2, Flag, RefreshCw } from "lucide-react";
+import {
+    AlertTriangle,
+    BookCopy,
+    BookOpen,
+    CheckCircle2,
+    CircleDollarSign,
+    Clock,
+    Flag,
+} from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { RouteGuard } from "@/components/RouteGuard";
 import { borrowingService } from "@/services/borrowingService";
-import { reservationService } from "@/services/reservationService";
-import { bookService } from "@/services/bookService";
-import { reviewService } from "@/services/reviewService";
+import { reportService } from "@/services/reportService";
+import type { IDashboardReport } from "@/types";
 
-type LibrarianStats = {
-    pendingBorrowings: number;
-    activeBorrowings: number;
-    returnTransit: number;
-    pendingReservations: number;
-    managedBooks: number;
-    reviewsNeedFollow: number;
-};
+const formatMoney = (amount: number): string =>
+    new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+        maximumFractionDigits: 0,
+    }).format(amount);
 
-const initialStats: LibrarianStats = {
-    pendingBorrowings: 0,
-    activeBorrowings: 0,
-    returnTransit: 0,
-    pendingReservations: 0,
-    managedBooks: 0,
-    reviewsNeedFollow: 0,
+const shortMoney = (amount: number): string => {
+    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
+    if (amount >= 1_000) return `${Math.round(amount / 1_000)}k`;
+    return `${amount}`;
 };
 
 export default function LibrarianDashboard() {
     const { user } = useAuthStore();
-    const [stats, setStats] = useState<LibrarianStats>(initialStats);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const fetchStats = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const [pendingBorrowings, borrowed, overdue, returnTransit, pendingReservations, books, reviewDashboard] = await Promise.all([
-                borrowingService.getBorrowings({ page: 1, limit: 1, status: "pending" }),
-                borrowingService.getBorrowings({ page: 1, limit: 1, status: "borrowed" }),
-                borrowingService.getBorrowings({ page: 1, limit: 1, status: "overdue" }),
-                borrowingService.getBorrowings({ page: 1, limit: 1, status: "return_transit" }),
-                reservationService.getReservations({ page: 1, limit: 1, status: "pending" }),
-                bookService.getBooks({ page: 1, limit: 1, libraryId: user?.libraryId?._id }),
-                reviewService.getLibrarianReviewDashboard(12),
-            ]);
-
-            setStats({
-                pendingBorrowings: pendingBorrowings.pagination.total,
-                activeBorrowings: borrowed.pagination.total + overdue.pagination.total,
-                returnTransit: returnTransit.pagination.total,
-                pendingReservations: pendingReservations.pagination.total,
-                managedBooks: books.pagination.total,
-                reviewsNeedFollow: reviewDashboard.lowStar.length,
-            });
-        } catch {
-            setError("Khong tai duoc so lieu dashboard thu thu.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    const [analytics, setAnalytics] = useState<IDashboardReport | null>(null);
+    const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+    const [opsCounts, setOpsCounts] = useState({
+        pending: 0,
+        borrowed: 0,
+        overdue: 0,
+    });
 
     useEffect(() => {
-        void fetchStats();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.libraryId?._id]);
+        const fetchDashboard = async () => {
+            try {
+                setLoading(true);
+                setAnalyticsError(null);
 
-    const cards = useMemo(
-        () => [
-            { label: "Yeu cau cho duyet", value: stats.pendingBorrowings, icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-            { label: "Dang cho muon", value: stats.activeBorrowings, icon: BookCopy, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
-            { label: "Cho nhan ve kho", value: stats.returnTransit, icon: CheckCircle2, color: "text-cyan-400", bg: "bg-cyan-500/10 border-cyan-500/20" },
-            { label: "Dat truoc cho xu ly", value: stats.pendingReservations, icon: Clock, color: "text-indigo-400", bg: "bg-indigo-500/10 border-indigo-500/20" },
-            { label: "Tong dau sach quan ly", value: stats.managedBooks, icon: BookOpen, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-            { label: "Review can theo doi", value: stats.reviewsNeedFollow, icon: Flag, color: "text-rose-400", bg: "bg-rose-500/10 border-rose-500/20" },
-        ],
-        [stats]
+                const [pendingRes, borrowedRes, overdueRes, dashboardReport] = await Promise.all([
+                    borrowingService.getBorrowings({ page: 1, limit: 1, status: "pending" }),
+                    borrowingService.getBorrowings({ page: 1, limit: 1, status: "borrowed" }),
+                    borrowingService.getBorrowings({ page: 1, limit: 1, status: "overdue", finePaid: false }),
+                    reportService.getDashboardReport({ months: 12, topLimit: 6, activityThreshold: 3 }),
+                ]);
+
+                setOpsCounts({
+                    pending: pendingRes.pagination.total,
+                    borrowed: borrowedRes.pagination.total,
+                    overdue: overdueRes.pagination.total,
+                });
+                setAnalytics(dashboardReport);
+            } catch {
+                setAnalyticsError("Không thể tải dữ liệu dashboard thủ thư.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        void fetchDashboard();
+    }, []);
+
+    const incurredFine12m = useMemo(
+        () => (analytics?.fineIncurredByMonth || []).reduce((sum, item) => sum + item.totalFineIncurred, 0),
+        [analytics]
     );
 
+    const monthlyFineIncurred = useMemo(() => (analytics?.fineIncurredByMonth || []).slice(-8), [analytics]);
+    const maxMonthlyRevenue = useMemo(
+        () => Math.max(...monthlyFineIncurred.map((item) => item.totalFineIncurred), 1),
+        [monthlyFineIncurred]
+    );
+
+    const topBooks = useMemo(() => (analytics?.topBorrowedBooks || []).slice(0, 6), [analytics]);
+    const maxTopBooks = useMemo(() => Math.max(...topBooks.map((item) => item.totalBorrowings), 1), [topBooks]);
+
+    const topViolators = useMemo(() => (analytics?.userActivity.topViolators || []).slice(0, 6), [analytics]);
+    const maxViolatorCount = useMemo(() => Math.max(...topViolators.map((item) => item.violationCount), 1), [topViolators]);
+
+    const onTimeCount = analytics?.lateReturnRate.onTimeCount || 0;
+    const lateCount = analytics?.lateReturnRate.lateOrOverdueCount || 0;
+    const totalReturnPerf = Math.max(onTimeCount + lateCount, 1);
+    const latePercent = (lateCount / totalReturnPerf) * 100;
+
+    const kpis = [
+        {
+            label: "Yêu cầu chờ duyệt",
+            value: String(opsCounts.pending),
+            icon: Clock,
+            accent: "text-amber-300",
+            box: "border-amber-500/30 bg-amber-500/10",
+        },
+        {
+            label: "Đang cho mượn",
+            value: String(opsCounts.borrowed),
+            icon: BookCopy,
+            accent: "text-blue-300",
+            box: "border-blue-500/30 bg-blue-500/10",
+        },
+        {
+            label: "Quá hạn chưa thanh toán",
+            value: String(opsCounts.overdue),
+            icon: AlertTriangle,
+            accent: "text-rose-300",
+            box: "border-rose-500/30 bg-rose-500/10",
+        },
+        {
+            label: "Phạt phát sinh (12 tháng)",
+            value: formatMoney(incurredFine12m),
+            icon: CircleDollarSign,
+            accent: "text-emerald-300",
+            box: "border-emerald-500/30 bg-emerald-500/10",
+        },
+    ];
+
     return (
-        <RouteGuard allowedRoles={["librarian"]}>
-            <div className="p-8">
-                <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">
-                            Xin chao, <span className="text-blue-400">{user?.fullName}</span>
-                        </h1>
-                        <p className="text-slate-400 mt-1 text-sm">
-                            Bang dieu khien thu thu
-                            {user?.libraryId?.name ? ` · ${user.libraryId.name}` : ""}
-                        </p>
+        <RouteGuard allowedRoles={["librarian", "admin"]}>
+            <div className="p-8 space-y-6">
+                <div className="rounded-3xl border border-white/10 bg-slate-950/60 px-6 py-5">
+                    <h1 className="text-2xl font-bold text-white">
+                        Dashboard Thủ Thư · <span className="text-blue-400">{user?.fullName}</span>
+                    </h1>
+                    
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-amber-300">Pending: {opsCounts.pending}</span>
+                        <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-blue-300">Borrowed: {opsCounts.borrowed}</span>
+                        <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-rose-300">Overdue unpaid: {opsCounts.overdue}</span>
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-300">Fine incurred: {formatMoney(incurredFine12m)}</span>
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => void fetchStats()}
-                        className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20"
-                    >
-                        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-                        Lam moi
-                    </button>
                 </div>
 
-                {error && (
-                    <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                        {error}
-                    </div>
-                )}
+                {loading ? <p className="text-slate-400 text-sm">Đang tải dữ liệu dashboard...</p> : null}
+                {analyticsError ? <p className="text-red-300 text-sm">{analyticsError}</p> : null}
 
-                {loading ? (
-                    <div className="mb-6 flex items-center gap-2 text-slate-300 text-sm">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Dang tai so lieu...
-                    </div>
-                ) : null}
+                {!loading && !analyticsError && (
+                    <>
+                        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                            {kpis.map((item) => {
+                                const Icon = item.icon;
+                                return (
+                                    <div key={item.label} className={`rounded-2xl border p-4 ${item.box}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="text-xs text-slate-300">{item.label}</p>
+                                            <Icon className={`h-4 w-4 ${item.accent}`} />
+                                        </div>
+                                        <p className={`text-2xl font-bold ${item.accent}`}>{item.value}</p>
+                                    </div>
+                                );
+                            })}
+                        </section>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-                    {cards.map((card) => {
-                        const Icon = card.icon;
-                        return (
-                            <div
-                                key={card.label}
-                                className={`flex items-center gap-4 rounded-2xl border bg-slate-900/60 p-5 ${card.bg}`}
-                            >
-                                <div className="rounded-xl bg-slate-800/60 p-3">
-                                    <Icon className={`h-5 w-5 ${card.color}`} />
+                        <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                            <div className="xl:col-span-2 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+                                <h2 className="text-sm font-semibold text-white mb-4">Phạt phát sinh theo tháng (8 tháng gần nhất)</h2>
+                                <p className="mb-3 text-xs text-slate-400">Cột ghi nhận theo tháng đến hạn phát sinh phạt, nên trễ ở 02/2026 sẽ hiển thị ở 02/2026.</p>
+                                <div className="h-64 grid grid-cols-8 gap-2">
+                                    {monthlyFineIncurred.map((item) => (
+                                        <div key={`mrev-${item.label}`} className="flex flex-col justify-end">
+                                            <div className="text-[10px] text-center text-emerald-300 mb-1 min-h-4">
+                                                {item.totalFineIncurred > 0 ? shortMoney(item.totalFineIncurred) : "0"}
+                                            </div>
+                                            <div className="h-48 flex items-end">
+                                                <div
+                                                    className="w-full rounded-t-md bg-gradient-to-t from-emerald-500/70 to-emerald-300"
+                                                    style={{ height: `${Math.max((item.totalFineIncurred / maxMonthlyRevenue) * 100, 4)}%` }}
+                                                />
+                                            </div>
+                                            <div className="text-[11px] text-center text-slate-400 mt-2">{item.label.slice(0, 2)}/{item.label.slice(-2)}</div>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div>
-                                    <p className="text-2xl font-bold text-white">{card.value}</p>
-                                    <p className="text-slate-400 text-xs mt-0.5">{card.label}</p>
+                                <div className="mt-4 rounded-xl border border-white/10 bg-slate-900/60 p-3 text-xs text-slate-300">
+                                    Tổng phạt phát sinh 12 tháng: <span className="text-emerald-300 font-semibold">{formatMoney((analytics?.fineIncurredByMonth || []).reduce((sum, item) => sum + item.totalFineIncurred, 0))}</span>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
 
-                <div className="rounded-2xl border border-white/5 bg-slate-900/60 p-6">
-                    <h2 className="text-white font-semibold mb-4">Thao tac nhanh</h2>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+                                <h2 className="text-sm font-semibold text-white mb-4">Hiệu suất trả sách</h2>
+                                <div className="flex items-center gap-4 mb-5">
+                                    <div
+                                        className="h-24 w-24 rounded-full"
+                                        style={{
+                                            background: `conic-gradient(#fb7185 ${latePercent}%, #34d399 ${latePercent}% 100%)`,
+                                        }}
+                                    >
+                                        <div className="h-full w-full scale-[0.7] rounded-full bg-slate-950" />
+                                    </div>
+                                    <div className="space-y-1 text-sm">
+                                        <p className="text-slate-300">Đúng hạn: <span className="text-emerald-300 font-semibold">{onTimeCount}</span></p>
+                                        <p className="text-slate-300">Muộn/quá hạn: <span className="text-rose-300 font-semibold">{lateCount}</span></p>
+                                    </div>
+                                </div>
+                                <div className="h-2 bg-slate-800 rounded-full overflow-hidden mb-2">
+                                    <div className="h-full bg-rose-400" style={{ width: `${latePercent}%` }} />
+                                </div>
+                                <p className="text-xs text-slate-400">Tỷ lệ muộn hiện tại: <span className="text-rose-300">{analytics?.lateReturnRate.lateReturnRate || 0}%</span></p>
+                            </div>
+                        </section>
+
+                        <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+                                <h2 className="text-sm font-semibold text-white mb-4">Top sách được mượn nhiều</h2>
+                                <div className="space-y-3">
+                                    {topBooks.map((book, index) => (
+                                        <div key={book.bookId}>
+                                            <div className="flex items-center justify-between text-xs mb-1">
+                                                <span className="text-slate-200 truncate pr-3">#{index + 1} {book.title}</span>
+                                                <span className="text-blue-300">{book.totalBorrowings} lượt</span>
+                                            </div>
+                                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                                <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-300" style={{ width: `${(book.totalBorrowings / maxTopBooks) * 100}%` }} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+                                <h2 className="text-sm font-semibold text-white mb-4">Người dùng vi phạm</h2>
+                                <div className="space-y-3">
+                                    {topViolators.map((item) => (
+                                        <div key={item.userId}>
+                                            <div className="flex items-center justify-between text-xs mb-1">
+                                                <span className="text-slate-200 truncate pr-3">{item.fullName}</span>
+                                                <span className="text-amber-300">{item.violationCount} lượt</span>
+                                            </div>
+                                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-amber-500 to-yellow-300"
+                                                    style={{ width: `${(item.violationCount / maxViolatorCount) * 100}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                    </>
+                )}
+
+                <section className="rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+                    <h2 className="text-sm font-semibold text-white mb-3">Lối tắt</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                         {[
-                            { label: "Quan ly muon/tra", icon: BookCopy, href: "/dashboard/borrowings" },
-                            { label: "Quan ly dat truoc", icon: Clock, href: "/dashboard/reservations" },
-                            { label: "Quan ly sach", icon: BookOpen, href: "/dashboard/books" },
-                            { label: "Quan ly review", icon: Flag, href: "/dashboard/reviews" },
-                        ].map((action) => {
-                            const Icon = action.icon;
+                            { label: "Xác nhận lấy sách", icon: CheckCircle2, href: "/dashboard/borrowings" },
+                            { label: "Ghi nhận trả sách", icon: BookCopy, href: "/dashboard/borrowings" },
+                            { label: "Thêm sách mới", icon: BookOpen, href: "/dashboard/books" },
+                            { label: "Review cần theo dõi", icon: Flag, href: "/dashboard/reviews" },
+                        ].map((item) => {
+                            const Icon = item.icon;
                             return (
-                                <a
-                                    key={action.label}
-                                    href={action.href}
-                                    className="flex flex-col items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-600/10 p-4 text-center text-xs font-medium text-blue-300 transition-all hover:border-blue-500/40 hover:bg-blue-600/20 hover:text-blue-200"
-                                >
-                                    <Icon className="h-5 w-5" />
-                                    {action.label}
+                                <a key={item.label} href={item.href} className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-blue-300 hover:bg-blue-500/20 transition-colors flex items-center gap-2">
+                                    <Icon className="h-4 w-4" />
+                                    <span>{item.label}</span>
                                 </a>
                             );
                         })}
                     </div>
-                </div>
+                </section>
             </div>
         </RouteGuard>
     );

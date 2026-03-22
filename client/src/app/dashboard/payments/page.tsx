@@ -40,7 +40,7 @@ export default function PaymentHistoryPage() {
         if (callbackStatus === "success") {
             return {
                 type: "success" as const,
-                message: `Thanh toán VNPay thành công${callbackTxnRef ? ` (TxnRef: ${callbackTxnRef})` : ""}.`,
+                message: `Thanh toán VNPay thành công. Vui lòng kiểm tra tài khoản.`,
             };
         }
 

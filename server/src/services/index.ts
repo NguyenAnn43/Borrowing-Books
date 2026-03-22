@@ -9,3 +9,4 @@ export * as registerVerificationService from './registerVerificationService';
 export * as paymentService from './paymentService';
 export * as mailService from './mailService';
 export * as transitService from './transitService';
+export * as reportService from './reportService';

@@ -12,6 +12,7 @@ export interface GetBorrowingsParams {
     page?: number;
     limit?: number;
     status?: "pending" | "borrowed" | "returned" | "overdue" | "return_transit" | "cancelled" | "lost" | "damaged";
+    finePaid?: boolean;
     libraryId?: string;
     userId?: string;
 }
@@ -36,7 +37,7 @@ export const borrowingService = {
     /**
      * Get my borrowings (user)
      */
-    getMyBorrowings: async (params: { page?: number; limit?: number; status?: string } = {}) => {
+    getMyBorrowings: async (params: { page?: number; limit?: number; status?: string; finePaid?: boolean } = {}) => {
         const response = await api.get<ApiResponse<IBorrowing[]>>("/borrowings/my", { params });
         return {
             borrowings: response.data.data,

@@ -6,3 +6,4 @@ export * from './reservationSchema';
 export * from './wishlistSchema';
 export * from './reviewSchema';
 export * from './transitSchema';
+export * from './reportSchema';

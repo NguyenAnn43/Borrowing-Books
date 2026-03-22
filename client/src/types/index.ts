@@ -240,7 +240,7 @@ export interface IPayment {
         status?: IBorrowing["status"];
         finePaid?: boolean;
     };
-    provider: "vnpay";
+    provider: "vnpay" | "cash";
     status: "pending" | "success" | "failed";
     amount: number;
     txnRef: string;
@@ -249,6 +249,80 @@ export interface IPayment {
     paidAt?: string;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface IMonthlyFineRevenueItem {
+    year: number;
+    month: number;
+    label: string;
+    totalRevenue: number;
+    successfulPayments: number;
+}
+
+export interface IMonthlyFineIncurredItem {
+    year: number;
+    month: number;
+    label: string;
+    totalFineIncurred: number;
+    finedBorrowings: number;
+}
+
+export interface ITopBorrowedBookItem {
+    bookId: string;
+    title: string;
+    author: string;
+    coverImage: string | null;
+    totalBorrowings: number;
+    uniqueBorrowers: number;
+}
+
+export interface ILateReturnRateReport {
+    totalConsidered: number;
+    lateOrOverdueCount: number;
+    onTimeCount: number;
+    lateReturnRate: number;
+}
+
+export interface IUserActivitySummary {
+    totalUsersWithBorrowings: number;
+    activeUsers: number;
+    violators: number;
+    activeRate: number;
+    violationRate: number;
+    overlapCount: number;
+    activityThreshold: number;
+}
+
+export interface IUserActivityMember {
+    userId: string;
+    fullName: string;
+    email: string;
+    totalBorrowings: number;
+    violationCount: number;
+    isActive: boolean;
+    isViolator: boolean;
+}
+
+export interface IUserActivityReport {
+    summary: IUserActivitySummary;
+    topActiveUsers: IUserActivityMember[];
+    topViolators: IUserActivityMember[];
+}
+
+export interface IDashboardReport {
+    fineRevenueByMonth: IMonthlyFineRevenueItem[];
+    fineIncurredByMonth: IMonthlyFineIncurredItem[];
+    topBorrowedBooks: ITopBorrowedBookItem[];
+    lateReturnRate: ILateReturnRateReport;
+    userActivity: IUserActivityReport;
+}
+
+export interface IReportQuery {
+    from?: string;
+    to?: string;
+    topLimit?: number;
+    months?: number;
+    activityThreshold?: number;
 }
 
 // Auth types

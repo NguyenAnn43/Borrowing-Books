@@ -9,3 +9,4 @@ export * as wishlistController from './wishlistController';
 export * as reviewController from './reviewController';
 export * as paymentController from './paymentController';
 export * as transitController from './transitController';
+export * as reportController from './reportController';
