@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Loader2 } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { notificationService } from "@/services/notificationService";
@@ -15,13 +15,22 @@ export default function NotificationsPage() {
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [unreadOnly, setUnreadOnly] = useState(false);
+    const pendingRequestRef = useRef<AbortController | null>(null);
 
-    const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 10 });
+    const { page, limit, pagination, updatePagination, goToPage } = usePagination({ initialPage: 1, defaultLimit: 6 });
 
     const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications]);
 
     const fetchNotifications = useCallback(
-        async () => {
+        async (p?: number) => {
+            // Cancel any pending requests
+            if (pendingRequestRef.current) {
+                pendingRequestRef.current.abort();
+            }
+
+            const controller = new AbortController();
+            pendingRequestRef.current = controller;
+
             setLoading(true);
             setError(null);
             try {
@@ -30,39 +39,37 @@ export default function NotificationsPage() {
                     limit,
                     unreadOnly,
                 });
-                setNotifications(result.notifications);
-                updatePagination(result.meta);
+
+                if (!controller.signal.aborted) {
+                    setNotifications(result.notifications);
+                    updatePagination(result.meta);
+                }
             } catch (fetchError) {
-                const message = fetchError instanceof Error ? fetchError.message : "Không tải được thông báo.";
-                setError(message);
+                if ((fetchError as any)?.name !== 'AbortError') {
+                    const message = fetchError instanceof Error ? fetchError.message : "Không tải được thông báo.";
+                    setError(message);
+                }
             } finally {
-                setLoading(false);
+                if (!controller.signal.aborted) {
+                    setLoading(false);
+                }
             }
         },
         [page, limit, unreadOnly, updatePagination]
     );
 
-    const prevUnreadOnlyRef = useRef(unreadOnly);
-    const prevLimitRef = useRef(limit);
+    useEffect(() => {
+        void fetchNotifications(1);
+        goToPage(1);
+    }, [unreadOnly]);
 
     useEffect(() => {
-        let shouldResetPage = false;
-        
-        if (prevUnreadOnlyRef.current !== unreadOnly) {
-            prevUnreadOnlyRef.current = unreadOnly;
-            shouldResetPage = true;
-        }
-        if (prevLimitRef.current !== limit) {
-            prevLimitRef.current = limit;
-            shouldResetPage = true;
-        }
-
-        if (shouldResetPage && page !== 1) {
-            goToPage(1);
-        } else {
+        const timeoutId = setTimeout(() => {
             void fetchNotifications();
-        }
-    }, [fetchNotifications, unreadOnly, limit, page, goToPage]);
+        }, 200);
+
+        return () => clearTimeout(timeoutId);
+    }, [page, fetchNotifications]);
 
     const handleMarkAsRead = async (id: string) => {
         setActionLoading(true);

@@ -31,6 +31,17 @@ const getStatusColor = (status: string): string => {
     return colorMap[status] || "bg-slate-500/20 border border-slate-500/50 text-slate-200";
 };
 
+const getStatusLabel = (status: string): string => {
+    const statusMap: Record<string, string> = {
+        pending: "Chờ xử lý",
+        ready: "Đã sẵn sàng",
+        completed: "Đã hoàn thành",
+        cancelled: "Đã hủy",
+        expired: "Hết hạn",
+    };
+    return statusMap[status] || status;
+};
+
 export default function ReservationsPage() {
     const { user } = useAuthStore();
     const [reservations, setReservations] = useState<IReservation[]>([]);
@@ -223,7 +234,7 @@ export default function ReservationsPage() {
                                                 <td className="py-2 pr-3">{item.libraryId?.name || "-"}</td>
                                                 <td className="py-2 pr-3">
                                                     <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${getStatusColor(item.status)}`}>
-                                                        {item.status}
+                                                        {getStatusLabel(item.status)}
                                                     </span>
                                                 </td>
                                                 <td className="py-2 pr-3">{new Date(item.reservationDate).toLocaleDateString("vi-VN")}</td>
