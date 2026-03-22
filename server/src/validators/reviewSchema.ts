@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const imageUrlSchema = z.string().url('Image must be a valid URL');
+const objectIdSchema = z.string().regex(/^[a-fA-F0-9]{24}$/, 'Invalid review ID');
 
 const paginationQuerySchema = z.object({
     page: z.string().transform(Number).default('1'),
@@ -27,6 +28,9 @@ export const getBookReviewsSchema = {
 export const createBookReviewSchema = {
     body: baseReviewBodySchema.extend({
         bookId: z.string().min(1, 'Book ID is required'),
+        agreedToGuidelines: z.boolean().refine((value) => value === true, {
+            message: 'You must agree to review guidelines before posting',
+        }),
     }),
 };
 
@@ -53,6 +57,9 @@ export const getLibraryReviewsSchema = {
 export const createLibraryReviewSchema = {
     body: baseReviewBodySchema.extend({
         libraryId: z.string().min(1, 'Library ID is required'),
+        agreedToGuidelines: z.boolean().refine((value) => value === true, {
+            message: 'You must agree to review guidelines before posting',
+        }),
     }),
 };
 
@@ -72,8 +79,12 @@ export const deleteLibraryReviewSchema = {
 export const createReviewReportSchema = {
     body: z.object({
         reviewType: z.enum(['book', 'library']),
-        reviewId: z.string().min(1, 'Review ID is required'),
-        reason: z.string().min(5, 'Reason should be at least 5 characters').max(500, 'Reason cannot exceed 500 characters'),
+        reviewId: objectIdSchema,
+        reason: z
+            .string()
+            .trim()
+            .min(5, 'Reason should be at least 5 characters')
+            .max(500, 'Reason cannot exceed 500 characters'),
     }),
 };
 
@@ -90,7 +101,7 @@ export const moderateReviewSchema = {
     body: z.object({
         reviewType: z.enum(['book', 'library']),
         reviewId: z.string().min(1, 'Review ID is required'),
-        action: z.enum(['keep', 'hide', 'delete']),
+        action: z.enum(['keep', 'hide']),
         note: z.string().max(1000, 'Note cannot exceed 1000 characters').optional(),
     }),
 };

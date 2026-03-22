@@ -178,6 +178,7 @@ export default function BorrowingsPage() {
     const [reviewStars, setReviewStars] = useState<number>(5);
     const [reviewComment, setReviewComment] = useState<string>("");
     const [reviewImagesText, setReviewImagesText] = useState<string>("");
+    const [reviewGuidelinesAccepted, setReviewGuidelinesAccepted] = useState(false);
     const [reviewError, setReviewError] = useState<string | null>(null);
     const [libraryReviewModalOpen, setLibraryReviewModalOpen] = useState(false);
     const [libraryReviewLoading, setLibraryReviewLoading] = useState(false);
@@ -188,6 +189,7 @@ export default function BorrowingsPage() {
     const [libraryReviewStars, setLibraryReviewStars] = useState<number>(5);
     const [libraryReviewComment, setLibraryReviewComment] = useState<string>("");
     const [libraryReviewImagesText, setLibraryReviewImagesText] = useState<string>("");
+    const [libraryReviewGuidelinesAccepted, setLibraryReviewGuidelinesAccepted] = useState(false);
     const [libraryReviewError, setLibraryReviewError] = useState<string | null>(null);
 
     const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -356,6 +358,7 @@ export default function BorrowingsPage() {
         setReviewStars(5);
         setReviewComment("");
         setReviewImagesText("");
+        setReviewGuidelinesAccepted(false);
         setReviewLoading(true);
 
         try {
@@ -367,6 +370,7 @@ export default function BorrowingsPage() {
                 setReviewStars(mine.stars);
                 setReviewComment(mine.comment || "");
                 setReviewImagesText(mine.images.join("\n"));
+                setReviewGuidelinesAccepted(true);
             }
         } catch (fetchError) {
             const message = fetchError instanceof Error ? fetchError.message : "Không thể tải dữ liệu review.";
@@ -387,6 +391,16 @@ export default function BorrowingsPage() {
 
     const submitReview = async () => {
         if (!reviewBookId) return;
+
+        if (currentReview?.isHidden) {
+            setReviewError("Review của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng, không thể chỉnh sửa hoặc gửi lại.");
+            return;
+        }
+
+        if (!currentReview && !reviewGuidelinesAccepted) {
+            setReviewError("Bạn cần xác nhận tuân thủ quy tắc review trước khi gửi.");
+            return;
+        }
 
         setReviewSubmitting(true);
         setReviewError(null);
@@ -409,6 +423,7 @@ export default function BorrowingsPage() {
                     stars: reviewStars,
                     comment: reviewComment.trim() || undefined,
                     images,
+                    agreedToGuidelines: true,
                 });
                 setSuccess("Đã gửi đánh giá sách.");
             }
@@ -451,6 +466,7 @@ export default function BorrowingsPage() {
         setLibraryReviewStars(5);
         setLibraryReviewComment("");
         setLibraryReviewImagesText("");
+        setLibraryReviewGuidelinesAccepted(false);
         setLibraryReviewLoading(true);
 
         try {
@@ -462,6 +478,7 @@ export default function BorrowingsPage() {
                 setLibraryReviewStars(mine.stars);
                 setLibraryReviewComment(mine.comment || "");
                 setLibraryReviewImagesText(mine.images.join("\n"));
+                setLibraryReviewGuidelinesAccepted(true);
             }
         } catch (fetchError) {
             const message = fetchError instanceof Error ? fetchError.message : "Không thể tải review thư viện.";
@@ -482,6 +499,16 @@ export default function BorrowingsPage() {
 
     const submitLibraryReview = async () => {
         if (!reviewLibraryId) return;
+
+        if (currentLibraryReview?.isHidden) {
+            setLibraryReviewError("Review của bạn đã bị ẩn do vi phạm tiêu chuẩn cộng đồng, không thể chỉnh sửa hoặc gửi lại.");
+            return;
+        }
+
+        if (!currentLibraryReview && !libraryReviewGuidelinesAccepted) {
+            setLibraryReviewError("Bạn cần xác nhận tuân thủ quy tắc review trước khi gửi.");
+            return;
+        }
 
         setLibraryReviewSubmitting(true);
         setLibraryReviewError(null);
@@ -504,6 +531,7 @@ export default function BorrowingsPage() {
                     stars: libraryReviewStars,
                     comment: libraryReviewComment.trim() || undefined,
                     images,
+                    agreedToGuidelines: true,
                 });
                 setSuccess("Đã gửi đánh giá thư viện.");
             }
@@ -1327,6 +1355,12 @@ export default function BorrowingsPage() {
                                         </div>
                                     )}
 
+                                    {currentReview?.isHidden && (
+                                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                                            Review này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng. Bạn không thể chỉnh sửa hoặc review lại sách này.
+                                        </div>
+                                    )}
+
                                     <div>
                                         <label className="mb-1 block text-xs font-semibold text-slate-300">Số sao (1-5)</label>
                                         <Input
@@ -1350,6 +1384,28 @@ export default function BorrowingsPage() {
                                     </div>
 
                                     <div>
+                                        {!currentReview && (
+                                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                                                <p className="font-semibold">Quy tắc review</p>
+                                                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                                                    <li>Giữ thái độ lịch sự, không công kích cá nhân.</li>
+                                                    <li>Không spam, không nội dung sai sự thật.</li>
+                                                    <li>Chia sẻ trải nghiệm thực tế, đúng ngữ cảnh sách.</li>
+                                                </ul>
+                                                <label className="mt-2 flex items-start gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={reviewGuidelinesAccepted}
+                                                        onChange={(e) => setReviewGuidelinesAccepted(e.target.checked)}
+                                                        className="mt-0.5 h-4 w-4 rounded border-slate-400"
+                                                    />
+                                                    <span>Tôi đã đọc và đồng ý tuân thủ quy tắc review.</span>
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
                                         <label className="mb-1 block text-xs font-semibold text-slate-300">Ảnh (URL, mỗi dòng 1 ảnh)</label>
                                         <textarea
                                             value={reviewImagesText}
@@ -1365,7 +1421,7 @@ export default function BorrowingsPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => void removeBookReview()}
-                                                disabled={reviewSubmitting}
+                                                disabled={reviewSubmitting || Boolean(currentReview?.isHidden)}
                                                 className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
                                             >
                                                 Xóa đánh giá
@@ -1382,7 +1438,7 @@ export default function BorrowingsPage() {
                                         <button
                                             type="button"
                                             onClick={() => void submitReview()}
-                                            disabled={reviewSubmitting}
+                                            disabled={reviewSubmitting || Boolean(currentReview?.isHidden) || (!currentReview && !reviewGuidelinesAccepted)}
                                             className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-xs font-semibold text-yellow-200 hover:bg-yellow-500/20 disabled:opacity-60"
                                         >
                                             {reviewSubmitting ? "Đang lưu..." : currentReview ? "Cập nhật" : "Gửi đánh giá"}
@@ -1425,6 +1481,12 @@ export default function BorrowingsPage() {
                                         </div>
                                     )}
 
+                                    {currentLibraryReview?.isHidden && (
+                                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                                            Review này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng. Bạn không thể chỉnh sửa hoặc review lại thư viện này.
+                                        </div>
+                                    )}
+
                                     <div>
                                         <label className="mb-1 block text-xs font-semibold text-slate-300">Số sao (1-5)</label>
                                         <Input
@@ -1448,6 +1510,28 @@ export default function BorrowingsPage() {
                                     </div>
 
                                     <div>
+                                        {!currentLibraryReview && (
+                                            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+                                                <p className="font-semibold">Quy tắc review</p>
+                                                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                                                    <li>Giữ thái độ lịch sự, không công kích cá nhân.</li>
+                                                    <li>Không spam, không nội dung sai sự thật.</li>
+                                                    <li>Chia sẻ trải nghiệm thực tế, đúng ngữ cảnh thư viện.</li>
+                                                </ul>
+                                                <label className="mt-2 flex items-start gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={libraryReviewGuidelinesAccepted}
+                                                        onChange={(e) => setLibraryReviewGuidelinesAccepted(e.target.checked)}
+                                                        className="mt-0.5 h-4 w-4 rounded border-slate-400"
+                                                    />
+                                                    <span>Tôi đã đọc và đồng ý tuân thủ quy tắc review.</span>
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div>
                                         <label className="mb-1 block text-xs font-semibold text-slate-300">Ảnh (URL, mỗi dòng 1 ảnh)</label>
                                         <textarea
                                             value={libraryReviewImagesText}
@@ -1463,7 +1547,7 @@ export default function BorrowingsPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => void removeLibraryReview()}
-                                                disabled={libraryReviewSubmitting}
+                                                disabled={libraryReviewSubmitting || Boolean(currentLibraryReview?.isHidden)}
                                                 className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
                                             >
                                                 Xóa đánh giá
@@ -1480,7 +1564,7 @@ export default function BorrowingsPage() {
                                         <button
                                             type="button"
                                             onClick={() => void submitLibraryReview()}
-                                            disabled={libraryReviewSubmitting}
+                                            disabled={libraryReviewSubmitting || Boolean(currentLibraryReview?.isHidden) || (!currentLibraryReview && !libraryReviewGuidelinesAccepted)}
                                             className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-60"
                                         >
                                             {libraryReviewSubmitting ? "Đang lưu..." : currentLibraryReview ? "Cập nhật" : "Gửi đánh giá"}

@@ -8,6 +8,12 @@ if (!fs.existsSync(uploadRoot)) {
     fs.mkdirSync(uploadRoot, { recursive: true });
 }
 
+const reviewsRoot = path.resolve(process.cwd(), 'uploads/reviews');
+if (!fs.existsSync(reviewsRoot)) {
+    fs.mkdirSync(reviewsRoot, { recursive: true });
+}
+
+
 const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
         cb(null, uploadRoot);
@@ -36,3 +42,27 @@ export const uploadAvatar = multer({
         fileSize: 5 * 1024 * 1024, // 5MB
     },
 });
+
+const reviewStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+        cb(null, reviewsRoot);
+    },
+    filename: (req, file, cb) => {
+        const safeOriginal = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const extension = path.extname(safeOriginal) || '.jpg';
+        const baseName = path.basename(safeOriginal, extension);
+        const user = (req as any).user;
+        const prefix = user ? user._id.toString() : 'guest';
+        cb(null, `review_${prefix}_${Date.now()}_${baseName}${extension}`);
+    },
+});
+
+export const uploadReviewImages = multer({
+    storage: reviewStorage,
+    fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB per file
+        files: 5, // max 5 files
+    },
+});
+

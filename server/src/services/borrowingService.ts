@@ -396,7 +396,7 @@ export const createBulkBorrowing = async (userId: string, data: CreateBulkBorrow
     }
 
     const dueDate = generateDueDate(new Date(), BORROWING_SETTINGS.DEFAULT_BORROW_DAYS);
-    
+
     const borrowingsToCreate = uniqueBookIds.map(bookId => ({
         userId,
         bookId,
@@ -924,7 +924,7 @@ export const reportLostOrDamaged = async (
 
         // Check if already lost or damaged to prevent duplicate penalties
         if (borrowing.status === BORROWING_STATUS.LOST || borrowing.status === BORROWING_STATUS.DAMAGED) {
-             throw new AppError(`Borrowing is already marked as ${borrowing.status}`, 400, 'ALREADY_REPORTED');
+            throw new AppError(`Borrowing is already marked as ${borrowing.status}`, 400, 'ALREADY_REPORTED');
         }
 
         // Librarians can only manage borrowings for their own library
@@ -944,10 +944,10 @@ export const reportLostOrDamaged = async (
         if (!book) throw new AppError('Associated book not found', 404, 'BOOK_NOT_FOUND');
 
         // Determine penalty multiplier
-        const penaltyMultiplier = status === 'lost' 
-            ? BORROWING_SETTINGS.LOST_PENALTY_MULTIPLIER 
+        const penaltyMultiplier = status === 'lost'
+            ? BORROWING_SETTINGS.LOST_PENALTY_MULTIPLIER
             : BORROWING_SETTINGS.DAMAGED_PENALTY_MULTIPLIER;
-        
+
         const bookPrice = book.price || 0;
         const penaltyFee = bookPrice * penaltyMultiplier;
 
@@ -959,7 +959,7 @@ export const reportLostOrDamaged = async (
         if (notes) {
             borrowing.notes = borrowing.notes ? `${borrowing.notes}\n[${status.toUpperCase()}]: ${notes}` : `[${status.toUpperCase()}]: ${notes}`;
         }
-        
+
         const now = new Date();
         borrowing.actualReturnDate = now;
 
@@ -972,7 +972,7 @@ export const reportLostOrDamaged = async (
         // It was already decremented from availableCopies when borrowed.
         if (book.totalCopies > 0) {
             await Book.findByIdAndUpdate(
-                book._id, 
+                book._id,
                 { $inc: { totalCopies: -1 } },
                 { session }
             );
@@ -982,7 +982,7 @@ export const reportLostOrDamaged = async (
 
         const penaltyReason = status === 'lost' ? 'làm mất sách' : 'làm hỏng sách';
         const message = `Sách "${book.title}" đã được báo cáo là ${penaltyReason}. Bạn bị phạt ${penaltyFee.toLocaleString('vi-VN')} VND. Vui lòng thanh toán tại thư viện.`;
-        
+
         await notificationService.create({
             userId: toId(borrowing.userId),
             title: `Báo cáo ${penaltyReason}`,
@@ -998,6 +998,11 @@ export const reportLostOrDamaged = async (
         session.endSession();
     }
 };
+
+// --- BIẾN ĐIỀU KHIỂN CHẶN SPAM EMAIL (Dành cho Test) ---
+// Thay đổi thành true để bật tính năng chặn (chỉ gửi 1 lần/ngày)
+// Thay đổi thành false để tắt tính năng chặn (nhận được nhiều lần/ngày)
+const ENABLE_EMAIL_SPAM_BLOCK = true;
 
 /**
  * Send reminders for borrowings that will be due in N days.
@@ -1034,9 +1039,9 @@ export const sendDueSoonReminders = async (daysBeforeDue: number = 2): Promise<n
             const borrowingId = borrowing._id.toString();
             const userId = toId(borrowing.userId);
 
-            const existingReminder = config.SCHEDULER.dueSoonAllowRepeatInSameDay
-                ? null
-                : await Notification.findOne({
+            let existingReminder = null;
+            if (ENABLE_EMAIL_SPAM_BLOCK && !config.SCHEDULER.dueSoonAllowRepeatInSameDay) {
+                existingReminder = await Notification.findOne({
                     userId,
                     type: NOTIFICATION_TYPE.OVERDUE,
                     'metadata.kind': 'due_soon_reminder',
@@ -1044,6 +1049,7 @@ export const sendDueSoonReminders = async (daysBeforeDue: number = 2): Promise<n
                     'metadata.daysBeforeDue': dayLeft,
                     createdAt: { $gte: todayStart },
                 }).select('_id');
+            }
 
             if (existingReminder) {
                 skippedAlreadySent += 1;
@@ -1076,7 +1082,7 @@ export const sendDueSoonReminders = async (daysBeforeDue: number = 2): Promise<n
                         to: userEmail,
                         subject: `[BorrowingBooks] Nhắc hạn trả sách còn ${dayLeft} ngày`,
                         text: `Xin chào ${userName},\n\nSách "${bookTitle}" của bạn sẽ đến hạn sau ${dayLeft} ngày (hạn trả: ${dueDateText}).\nVui lòng trả hoặc gia hạn đúng hạn để tránh phí phạt.\n\nTruy cập hệ thống BorrowingBooks để xem chi tiết.`,
-                                                html: `
+                        html: `
 <!doctype html>
 <html lang="vi">
     <head>
@@ -1182,13 +1188,16 @@ export const sendOverdueFineReminders = async (): Promise<number> => {
         const userId = toId(borrowing.userId);
 
         // Spam guard: chỉ gửi 1 lần/ngày cho mỗi borrowing
-        const alreadySentToday = await Notification.findOne({
-            userId,
-            type: NOTIFICATION_TYPE.OVERDUE,
-            'metadata.kind': 'overdue_fine_reminder',
-            'metadata.borrowingId': borrowingId,
-            createdAt: { $gte: todayStart },
-        }).select('_id');
+        let alreadySentToday = null;
+        if (ENABLE_EMAIL_SPAM_BLOCK) {
+            alreadySentToday = await Notification.findOne({
+                userId,
+                type: NOTIFICATION_TYPE.OVERDUE,
+                'metadata.kind': 'overdue_fine_reminder',
+                'metadata.borrowingId': borrowingId,
+                createdAt: { $gte: todayStart },
+            }).select('_id');
+        }
 
         if (alreadySentToday) {
             skippedAlreadySent += 1;

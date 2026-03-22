@@ -17,6 +17,7 @@ interface CreateReviewPayload {
     stars: number;
     comment?: string;
     images?: string[];
+    agreedToGuidelines: true;
 }
 
 interface CreateReviewReportPayload {
@@ -28,7 +29,7 @@ interface CreateReviewReportPayload {
 interface ModerateReviewPayload {
     reviewType: 'book' | 'library';
     reviewId: string;
-    action: 'keep' | 'hide' | 'delete';
+    action: 'keep' | 'hide';
     note?: string;
 }
 
@@ -105,10 +106,30 @@ export const reviewService = {
         await api.put('/reviews/moderate', payload);
     },
 
+    uploadReviewImages: async (files: File[]): Promise<string[]> => {
+        const formData = new FormData();
+        files.forEach((file) => {
+            formData.append('images', file);
+        });
+
+        const response = await api.post<ApiResponse<string[]>>('/reviews/images', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+
+        return response.data.data;
+    },
+
     getLibrarianReviewDashboard: async (limit = 10): Promise<ILibrarianReviewDashboard> => {
         const response = await api.get<ApiResponse<ILibrarianReviewDashboard>>('/reviews/dashboard/librarian', {
             params: { limit },
         });
+        return response.data.data;
+    },
+
+    getMyReviews: async () => {
+        const response = await api.get<ApiResponse<{ bookReviews: IBookReview[]; libraryReviews: ILibraryReview[] }>>('/reviews/my');
         return response.data.data;
     },
 };
