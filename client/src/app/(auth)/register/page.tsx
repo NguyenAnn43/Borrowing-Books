@@ -225,7 +225,7 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8">
             <div
                 className="absolute inset-0 bg-cover bg-center bg-no-repeat"
                 style={{
@@ -242,7 +242,7 @@ export default function RegisterPage() {
                 <BookMarked className="absolute bottom-[25%] right-[8%] h-9 w-9 text-blue-400/15 rotate-[-8deg]" />
             </div>
 
-            <div className="relative z-10 w-full max-w-md mx-4 my-8">
+            <div className="relative z-10 my-8 w-full max-w-lg">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-2xl shadow-blue-500/40 mb-4">
                         <BookOpen className="h-8 w-8 text-white" />
@@ -253,7 +253,7 @@ export default function RegisterPage() {
                     <p className="text-blue-200/70 text-sm mt-1">Hệ thống thư viện liên trường</p>
                 </div>
 
-                <div className="bg-white/16 backdrop-blur-xl border border-white/25 rounded-2xl shadow-2xl p-8">
+                <div className="max-h-[90vh] overflow-y-auto rounded-2xl border border-white/25 bg-white/16 p-6 shadow-2xl backdrop-blur-xl sm:p-8">
                     <h2 className="text-xl font-semibold text-white mb-1">Tạo tài khoản</h2>
                     <p className="text-blue-200/70 text-sm mb-6">
                         Điền thông tin để bắt đầu sử dụng hệ thống.
@@ -274,7 +274,7 @@ export default function RegisterPage() {
                         )}
 
                         {infoMessage && (
-                            <div className="p-3 rounded-lg bg-blue-500/15 border border-blue-400/30 text-blue-200 text-sm">
+                            <div className="rounded-lg border border-blue-400/30 bg-blue-500/15 p-3 text-sm text-blue-200 break-words">
                                 {infoMessage}
                             </div>
                         )}
@@ -309,15 +309,17 @@ export default function RegisterPage() {
 
                         <div className="space-y-1.5">
                             <label className="block text-sm font-medium text-blue-100">Email</label>
-                            <div className="relative flex items-center gap-2">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-300/60 pointer-events-none" />
-                                <input
-                                    type="email"
-                                    placeholder="email@example.com"
-                                    autoComplete="email"
-                                    {...register("email")}
-                                    className="w-full h-11 pl-10 pr-4 rounded-xl bg-white/10 border border-white/20 text-white placeholder-blue-300/40 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30 transition-all text-sm"
-                                />
+                            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-300/60 pointer-events-none" />
+                                    <input
+                                        type="email"
+                                        placeholder="email@example.com"
+                                        autoComplete="email"
+                                        {...register("email")}
+                                        className="h-11 w-full rounded-xl border border-white/20 bg-white/10 pl-10 pr-4 text-sm text-white placeholder-blue-300/40 transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    />
+                                </div>
                                 <button
                                     type="button"
                                     onClick={handleSendOtp}
@@ -337,7 +339,7 @@ export default function RegisterPage() {
                         {isOtpSent && (
                             <div className="space-y-1.5 rounded-xl border border-white/15 bg-white/10 p-3">
                                 <label className="block text-sm font-medium text-blue-100">Ma OTP</label>
-                                <div className="flex items-center gap-2">
+                                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                                     <input
                                         type="text"
                                         inputMode="numeric"

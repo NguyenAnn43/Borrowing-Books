@@ -9,6 +9,8 @@ import {
 	requestRegisterOtpSchema,
 	verifyRegisterOtpSchema,
 	changePasswordSchema,
+    forgotPasswordSchema,
+    resetPasswordSchema,
 } from '../validators';
 
 const router: IRouter = Router();
@@ -21,5 +23,7 @@ router.post('/logout', protect, authController.logout);
 router.post('/refresh-token', validate(refreshTokenSchema), authController.refreshToken);
 router.get('/me', protect, authController.me);
 router.post('/change-password', protect, validate(changePasswordSchema), authController.changePassword);
+router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
+router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
 
 export default router;

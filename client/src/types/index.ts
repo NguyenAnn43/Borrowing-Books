@@ -348,6 +348,12 @@ export interface IVerifyRegisterOtpResponse {
     expiresInSeconds: number;
 }
 
+export interface IForgotPasswordResponse {
+    accepted: boolean;
+    previewResetUrl?: string;
+    expiresInSeconds?: number;
+}
+
 export interface IAuthResponse {
     user: IUser;
     accessToken: string;

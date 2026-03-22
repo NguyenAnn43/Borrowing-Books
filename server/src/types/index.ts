@@ -15,6 +15,8 @@ export interface IUser extends Document {
     maxBorrowLimit: number;
     isFined: boolean;
     refreshToken?: string;
+    resetPasswordTokenHash?: string | null;
+    resetPasswordTokenExpiresAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
     comparePassword(candidatePassword: string): Promise<boolean>;

@@ -57,6 +57,25 @@ export const changePasswordSchema = {
     }),
 };
 
+export const forgotPasswordSchema = {
+    body: z.object({
+        email: z.string().email('Invalid email format'),
+    }),
+};
+
+export const resetPasswordSchema = {
+    body: z.object({
+        token: z.string().min(1, 'Reset token is required'),
+        newPassword: z
+            .string()
+            .min(8, 'Password must be at least 8 characters')
+            .regex(
+                /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+                'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+            ),
+    }),
+};
+
 // Types from schemas
 export type RegisterInput = z.infer<typeof registerSchema.body>;
 export type LoginInput = z.infer<typeof loginSchema.body>;
@@ -64,3 +83,5 @@ export type RefreshTokenInput = z.infer<typeof refreshTokenSchema.body>;
 export type RequestRegisterOtpInput = z.infer<typeof requestRegisterOtpSchema.body>;
 export type VerifyRegisterOtpInput = z.infer<typeof verifyRegisterOtpSchema.body>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema.body>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema.body>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema.body>;

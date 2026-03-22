@@ -139,3 +139,29 @@ export const changePassword = asyncHandler(async (req: AuthRequest, res: Respons
         message: 'Password changed successfully',
     });
 });
+
+/**
+ * Forgot password - request reset link.
+ */
+export const forgotPassword = asyncHandler(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const result = await authService.forgotPassword(email);
+
+    res.json({
+        success: true,
+        data: result,
+        message: 'If the email exists, a reset link has been sent.',
+    });
+});
+
+/**
+ * Reset password by token.
+ */
+export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+    await authService.resetPassword(req.body);
+
+    res.json({
+        success: true,
+        message: 'Password reset successfully',
+    });
+});
