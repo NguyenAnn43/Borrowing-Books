@@ -18,6 +18,11 @@ const DEFAULT_FORM = {
     description: "",
 };
 
+const libraryStatusLabel: Record<"active" | "inactive", string> = {
+    active: "Đang hoạt động",
+    inactive: "Tạm ngưng",
+};
+
 export default function AdminLibrariesPage() {
     const [libraries, setLibraries] = useState<ILibrary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -127,7 +132,7 @@ export default function AdminLibrariesPage() {
             <div className="p-8 space-y-6">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Quản lý thư viện</h1>
-                    <p className="text-sm text-slate-400 mt-1">Admin: thêm, sửa, xóa thư viện</p>
+                    <p className="text-sm text-slate-400 mt-1">Quản trị viên: thêm, sửa, xóa thư viện</p>
                 </div>
 
                 {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
@@ -146,8 +151,8 @@ export default function AdminLibrariesPage() {
                         <input className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white" placeholder="Số điện thoại" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
                         <input type="email" className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white" placeholder="Email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
                         <select className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white" value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value as "active" | "inactive" }))}>
-                            <option value="active">active</option>
-                            <option value="inactive">inactive</option>
+                            <option value="active">{libraryStatusLabel.active}</option>
+                            <option value="inactive">{libraryStatusLabel.inactive}</option>
                         </select>
                         <input type="time" className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white" value={form.open} onChange={(e) => setForm((p) => ({ ...p, open: e.target.value }))} />
                         <input type="time" className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white" value={form.close} onChange={(e) => setForm((p) => ({ ...p, close: e.target.value }))} />
@@ -191,7 +196,7 @@ export default function AdminLibrariesPage() {
                                         <tr key={library._id} className="border-b border-white/5 text-slate-200">
                                             <td className="py-2 pr-3">{library.name}</td>
                                             <td className="py-2 pr-3">{library.code}</td>
-                                            <td className="py-2 pr-3">{library.status}</td>
+                                            <td className="py-2 pr-3">{libraryStatusLabel[library.status] ?? library.status}</td>
                                             <td className="py-2 pr-3">{library.workingHours?.open || "08:00"} - {library.workingHours?.close || "17:00"}</td>
                                             <td className="py-2 pr-3">{library.email || "-"}</td>
                                             <td className="py-2 text-right">

@@ -79,7 +79,7 @@ export default function UserDashboard() {
     );
 
     return (
-        <RouteGuard allowedRoles={["user", "admin", "librarian"]}>
+        <RouteGuard allowedRoles={["user"]}>
             <div className="p-8">
                 <div className="mb-8">
                     <h1 className="text-2xl font-bold text-white">

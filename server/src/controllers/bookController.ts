@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { bookService } from '../services';
-import { asyncHandler } from '../utils';
+import { AppError, asyncHandler } from '../utils';
 import { AuthRequest } from '../types';
 
 /**
@@ -48,8 +48,12 @@ export const getBookAlternatives = asyncHandler(async (req: AuthRequest, res: Re
 /**
  * Create new book
  */
-export const createBook = asyncHandler(async (req: Request, res: Response) => {
-    const book = await bookService.createBook(req.body);
+export const createBook = asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+        throw new AppError('Please login to access this resource', 401, 'UNAUTHORIZED');
+    }
+
+    const book = await bookService.createBook(req.body, req.user);
 
     res.status(201).json({
         success: true,
@@ -61,9 +65,13 @@ export const createBook = asyncHandler(async (req: Request, res: Response) => {
 /**
  * Update book
  */
-export const updateBook = asyncHandler(async (req: Request, res: Response) => {
+export const updateBook = asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+        throw new AppError('Please login to access this resource', 401, 'UNAUTHORIZED');
+    }
+
     const id = req.params.id as string;
-    const book = await bookService.updateBook(id, req.body);
+    const book = await bookService.updateBook(id, req.body, req.user);
 
     res.json({
         success: true,
@@ -75,9 +83,13 @@ export const updateBook = asyncHandler(async (req: Request, res: Response) => {
 /**
  * Delete book
  */
-export const deleteBook = asyncHandler(async (req: Request, res: Response) => {
+export const deleteBook = asyncHandler(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+        throw new AppError('Please login to access this resource', 401, 'UNAUTHORIZED');
+    }
+
     const id = req.params.id as string;
-    await bookService.deleteBook(id);
+    await bookService.deleteBook(id, req.user);
 
     res.json({
         success: true,

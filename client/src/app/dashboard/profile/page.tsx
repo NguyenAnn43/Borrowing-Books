@@ -199,7 +199,7 @@ export default function ProfilePage() {
     };
 
     return (
-        <RouteGuard allowedRoles={["admin", "librarian", "user", "guest"]}>
+        <RouteGuard allowedRoles={["admin", "librarian", "user"]}>
             <div className="p-8">
                 <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>

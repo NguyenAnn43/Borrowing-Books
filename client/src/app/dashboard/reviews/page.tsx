@@ -46,6 +46,22 @@ const getReportReviewMeta = (report: IReviewReport): { itemName: string; reviewe
     };
 };
 
+const reviewTypeLabel: Record<"book" | "library", string> = {
+    book: "Đánh giá sách",
+    library: "Đánh giá thư viện",
+};
+
+const reportStatusLabel: Record<"pending" | "resolved", string> = {
+    pending: "Chờ xử lý",
+    resolved: "Đã xử lý",
+};
+
+const moderationActionLabel: Record<"keep" | "hide" | "delete", string> = {
+    keep: "Giữ nguyên",
+    hide: "Ẩn",
+    delete: "Xóa",
+};
+
 function LibrarianReviewCard({
     item,
     onReport,
@@ -59,7 +75,7 @@ function LibrarianReviewCard({
         <article className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <p className="text-xs text-slate-400">{item.reviewType === "book" ? "Book Review" : "Library Review"}</p>
+                    <p className="text-xs text-slate-400">{reviewTypeLabel[item.reviewType]}</p>
                     {item.book?._id ? (
                         <Link
                             href={`/books/${item.book._id}`}
@@ -87,7 +103,7 @@ function LibrarianReviewCard({
                     disabled={reporting}
                     className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/20 disabled:opacity-60"
                 >
-                    {reporting ? "Đang gửi..." : "Report lên Admin"}
+                    {reporting ? "Đang gửi..." : "Báo cáo lên quản trị"}
                 </button>
             </div>
         </article>
@@ -135,7 +151,7 @@ export default function ReviewsDashboardPage() {
                 setReports(result.reports);
             }
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Không tải được dữ liệu review.";
+            const message = err instanceof Error ? err.message : "Không tải được dữ liệu đánh giá.";
             setError(message);
         } finally {
             setLoading(false);
@@ -155,7 +171,7 @@ export default function ReviewsDashboardPage() {
     const submitReport = async () => {
         if (!reportTarget) return;
         if (!reportReason.trim()) {
-            setError("Vui lòng nhập lý do report.");
+            setError("Vui lòng nhập lý do báo cáo.");
             return;
         }
 
@@ -168,12 +184,12 @@ export default function ReviewsDashboardPage() {
                 reviewId: reportTarget.reviewId,
                 reason: reportReason.trim(),
             });
-            setSuccess("Đã gửi report review lên Admin.");
+            setSuccess("Đã gửi báo cáo đánh giá lên quản trị.");
             setReportModalOpen(false);
             setReportTarget(null);
             setReportReason("");
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Không thể report review.";
+            const message = err instanceof Error ? err.message : "Không thể gửi báo cáo đánh giá.";
             setError(message);
         } finally {
             setReportingId(null);
@@ -198,10 +214,10 @@ export default function ReviewsDashboardPage() {
                 action,
                 note,
             });
-            setSuccess(`Đã xử lý report: ${action}.`);
+            setSuccess(`Đã xử lý báo cáo: ${moderationActionLabel[action]}.`);
             await fetchData();
         } catch (err) {
-            const message = err instanceof Error ? err.message : "Không thể xử lý report.";
+            const message = err instanceof Error ? err.message : "Không thể xử lý báo cáo.";
             setError(message);
         } finally {
             setModeratingId(null);
@@ -222,9 +238,9 @@ export default function ReviewsDashboardPage() {
             <div className="p-8 space-y-6">
                 <div className="flex items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Quản lý review</h1>
+                        <h1 className="text-2xl font-bold text-white">Quản lý đánh giá</h1>
                         <p className="text-sm text-slate-400 mt-1">
-                            {isAdmin ? "Admin moderation toàn hệ thống" : "Librarian dashboard review theo thư viện quản lý"}
+                            {isAdmin ? "Quản trị viên kiểm duyệt toàn hệ thống" : "Thủ thư theo dõi đánh giá thuộc thư viện quản lý"}
                         </p>
                     </div>
                     {isAdmin && (
@@ -235,9 +251,9 @@ export default function ReviewsDashboardPage() {
                                 onChange={(e) => setStatusFilter(e.target.value as "pending" | "resolved" | "")}
                                 className="rounded-lg border border-white/15 bg-slate-800 px-3 py-2 text-xs text-white"
                             >
-                                <option value="pending">pending</option>
-                                <option value="resolved">resolved</option>
-                                <option value="">all</option>
+                                <option value="pending">{reportStatusLabel.pending}</option>
+                                <option value="resolved">{reportStatusLabel.resolved}</option>
+                                <option value="">Tất cả</option>
                             </select>
                         </div>
                     )}
@@ -248,7 +264,7 @@ export default function ReviewsDashboardPage() {
 
                 {loading ? (
                     <div className="flex items-center gap-2 text-slate-300 text-sm">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Đang tải dữ liệu review...
+                        <Loader2 className="h-4 w-4 animate-spin" /> Đang tải dữ liệu đánh giá...
                     </div>
                 ) : isLibrarian ? (
                     <div className="space-y-6">
@@ -280,11 +296,11 @@ export default function ReviewsDashboardPage() {
                 ) : (
                     <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
                         <h2 className="mb-4 flex items-center gap-2 text-white font-semibold">
-                            <ShieldCheck className="h-4 w-4 text-blue-300" /> Danh sách report review
+                            <ShieldCheck className="h-4 w-4 text-blue-300" /> Danh sách báo cáo đánh giá
                         </h2>
 
                         {reports.length === 0 ? (
-                            <p className="text-sm text-slate-400">Không có report.</p>
+                            <p className="text-sm text-slate-400">Không có báo cáo.</p>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full min-w-[1240px] text-sm">
@@ -296,9 +312,9 @@ export default function ReviewsDashboardPage() {
                                             <th className="py-2 pr-3">Người báo cáo</th>
                                             <th className="py-2 pr-3">Lý do</th>
                                             <th className="py-2 pr-3">Loại</th>
-                                            <th className="py-2 pr-3">Status</th>
-                                            <th className="py-2 pr-3">Created</th>
-                                            <th className="py-2 text-right">Moderate</th>
+                                            <th className="py-2 pr-3">Trạng thái</th>
+                                            <th className="py-2 pr-3">Ngày tạo</th>
+                                            <th className="py-2 text-right">Xử lý</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -322,10 +338,10 @@ export default function ReviewsDashboardPage() {
                                                     </td>
                                                     <td className="py-2 pr-3">
                                                         <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-1 text-xs text-blue-300">
-                                                            <Flag className="h-3 w-3" /> {report.reviewType}
+                                                            <Flag className="h-3 w-3" /> {reviewTypeLabel[report.reviewType]}
                                                         </span>
                                                     </td>
-                                                    <td className="py-2 pr-3">{report.status}</td>
+                                                    <td className="py-2 pr-3">{reportStatusLabel[report.status]}</td>
                                                     <td className="py-2 pr-3">{new Date(report.createdAt).toLocaleDateString("vi-VN")}</td>
                                                     <td className="py-2 text-right">
                                                         <div className="inline-flex items-center gap-2">
@@ -335,7 +351,7 @@ export default function ReviewsDashboardPage() {
                                                                 disabled={moderatingId === report._id}
                                                                 className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
                                                             >
-                                                                Keep
+                                                                {moderationActionLabel.keep}
                                                             </button>
                                                             <button
                                                                 type="button"
@@ -343,7 +359,7 @@ export default function ReviewsDashboardPage() {
                                                                 disabled={moderatingId === report._id}
                                                                 className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-500/20 disabled:opacity-60"
                                                             >
-                                                                Hide
+                                                                {moderationActionLabel.hide}
                                                             </button>
                                                             <button
                                                                 type="button"
@@ -351,7 +367,7 @@ export default function ReviewsDashboardPage() {
                                                                 disabled={moderatingId === report._id}
                                                                 className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-200 hover:bg-red-500/20 disabled:opacity-60"
                                                             >
-                                                                Delete
+                                                                {moderationActionLabel.delete}
                                                             </button>
                                                         </div>
                                                     </td>
@@ -369,7 +385,7 @@ export default function ReviewsDashboardPage() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
                         <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-900 p-5 shadow-2xl">
                             <div className="mb-4 flex items-center justify-between">
-                                <h3 className="text-base font-semibold text-white">Report review lên Admin</h3>
+                                <h3 className="text-base font-semibold text-white">Báo cáo đánh giá lên quản trị</h3>
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -382,14 +398,14 @@ export default function ReviewsDashboardPage() {
                                 </button>
                             </div>
 
-                            <p className="mb-2 text-sm text-slate-300">Nêu lý do rõ ràng để Admin có cơ sở xử lý.</p>
+                            <p className="mb-2 text-sm text-slate-300">Nêu lý do rõ ràng để quản trị viên có cơ sở xử lý.</p>
 
                             <textarea
                                 rows={4}
                                 value={reportReason}
                                 onChange={(e) => setReportReason(e.target.value)}
                                 className="w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                                placeholder="Nhập lý do report..."
+                                placeholder="Nhập lý do báo cáo..."
                             />
 
                             <div className="mt-4 flex justify-end gap-2">
@@ -407,7 +423,7 @@ export default function ReviewsDashboardPage() {
                                     disabled={Boolean(reportingId)}
                                     className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:opacity-60"
                                 >
-                                    {reportingId ? "Đang gửi..." : "Gửi report"}
+                                    {reportingId ? "Đang gửi..." : "Gửi báo cáo"}
                                 </button>
                             </div>
                         </div>

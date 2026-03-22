@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, Loader2, ShieldPlus, Trash2, X } from "lucide-react";
 import { RouteGuard } from "@/components/RouteGuard";
 import { userService } from "@/services/userService";
 import { libraryService } from "@/services/libraryService";
+import { usePagination } from "@/hooks";
+import { Pagination } from "@/components/ui/Pagination";
 import type { ILibrary, IUser } from "@/types";
 
 const DEFAULT_STAFF_FORM = {
@@ -39,6 +41,19 @@ const extractApiErrorMessage = (error: unknown, fallback: string): string => {
 
 const isStrongPassword = (value: string): boolean => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(value);
 
+const roleLabel: Record<IUser["role"], string> = {
+    admin: "Quản trị viên",
+    librarian: "Thủ thư",
+    user: "Bạn đọc",
+    guest: "Khách",
+};
+
+const statusLabel: Record<IUser["status"], string> = {
+    active: "Hoạt động",
+    inactive: "Tạm ngưng",
+    banned: "Bị khóa",
+};
+
 export default function AdminUsersPage() {
     const [users, setUsers] = useState<IUser[]>([]);
     const [libraries, setLibraries] = useState<ILibrary[]>([]);
@@ -49,28 +64,51 @@ export default function AdminUsersPage() {
     const [staffForm, setStaffForm] = useState(DEFAULT_STAFF_FORM);
     const [detailUser, setDetailUser] = useState<IUser | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [roleFilter, setRoleFilter] = useState<"" | IUser["role"]>("");
+    const [statusFilter, setStatusFilter] = useState<"" | IUser["status"]>("");
 
-    const fetchData = async () => {
+    const { page, limit, pagination, updatePagination, goToPage, setLimit } = usePagination({
+        initialPage: 1,
+        defaultLimit: 10,
+    });
+
+    const fetchUsers = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const [{ users: fetchedUsers }, { libraries: fetchedLibraries }] = await Promise.all([
-                userService.getUsers({ page: 1, limit: 100 }),
-                libraryService.getLibraries({ page: 1, limit: 100 }),
-            ]);
+            const { users: fetchedUsers, pagination: usersPagination } = await userService.getUsers({
+                page,
+                limit,
+                role: roleFilter || undefined,
+                status: statusFilter || undefined,
+            });
             setUsers(fetchedUsers);
-            setLibraries(fetchedLibraries);
+            updatePagination(usersPagination);
         } catch (fetchError) {
             const message = fetchError instanceof Error ? fetchError.message : "Không tải được dữ liệu người dùng.";
             setError(message);
         } finally {
             setLoading(false);
         }
-    };
+    }, [page, limit, roleFilter, statusFilter, updatePagination]);
+
+    const fetchLibraries = useCallback(async () => {
+        try {
+            const { libraries: fetchedLibraries } = await libraryService.getLibraries({ page: 1, limit: 100 });
+            setLibraries(fetchedLibraries);
+        } catch (fetchError) {
+            const message = fetchError instanceof Error ? fetchError.message : "Không tải được dữ liệu thư viện.";
+            setError(message);
+        }
+    }, []);
 
     useEffect(() => {
-        void fetchData();
-    }, []);
+        void fetchLibraries();
+    }, [fetchLibraries]);
+
+    useEffect(() => {
+        void fetchUsers();
+    }, [fetchUsers]);
 
     const filteredLibraries = useMemo(() => libraries.filter((item) => item.status === "active"), [libraries]);
 
@@ -106,7 +144,8 @@ export default function AdminUsersPage() {
             });
             setSuccess("Tạo tài khoản nhân sự thành công.");
             setStaffForm(DEFAULT_STAFF_FORM);
-            await fetchData();
+            goToPage(1);
+            await fetchUsers();
         } catch (createError) {
             const message = extractApiErrorMessage(createError, "Không thể tạo tài khoản.");
             setError(message);
@@ -116,6 +155,10 @@ export default function AdminUsersPage() {
     };
 
     const handleDeleteUser = async (target: IUser) => {
+        if (target.role === "admin") {
+            setError("Không thể xóa tài khoản admin.");
+            return;
+        }
         if (!confirm(`Xóa người dùng ${target.fullName}?`)) return;
 
         setError(null);
@@ -123,7 +166,7 @@ export default function AdminUsersPage() {
         try {
             await userService.deleteUser(target._id);
             setSuccess("Xóa người dùng thành công.");
-            await fetchData();
+            await fetchUsers();
         } catch (deleteError) {
             const message = deleteError instanceof Error ? deleteError.message : "Không thể xóa người dùng.";
             setError(message);
@@ -140,7 +183,7 @@ export default function AdminUsersPage() {
 
             if (!libraryId) {
                 if (filteredLibraries.length === 0) {
-                    setError("Không có thư viện active để gán cho librarian.");
+                    setError("Không có thư viện đang hoạt động để gán cho thủ thư.");
                     return;
                 }
 
@@ -148,10 +191,10 @@ export default function AdminUsersPage() {
                     libraryId = filteredLibraries[0]._id;
                 } else {
                     const options = filteredLibraries.map((item) => `${item.code} - ${item.name}`).join("\n");
-                    const selectedCode = window.prompt(`Nhập MÃ thư viện để gán librarian:\n${options}`)?.trim().toUpperCase();
+                    const selectedCode = window.prompt(`Nhập MÃ thư viện để gán thủ thư:\n${options}`)?.trim().toUpperCase();
 
                     if (!selectedCode) {
-                        setError("Bạn cần chọn thư viện để set role librarian.");
+                        setError("Bạn cần chọn thư viện để gán vai trò thủ thư.");
                         return;
                     }
 
@@ -171,10 +214,10 @@ export default function AdminUsersPage() {
                 role,
                 libraryId,
             });
-            setSuccess("Cập nhật role thành công.");
-            await fetchData();
+            setSuccess("Cập nhật vai trò thành công.");
+            await fetchUsers();
         } catch (roleError) {
-            const message = roleError instanceof Error ? roleError.message : "Không thể cập nhật role.";
+            const message = roleError instanceof Error ? roleError.message : "Không thể cập nhật vai trò.";
             setError(message);
         }
     };
@@ -198,7 +241,7 @@ export default function AdminUsersPage() {
             <div className="p-8 space-y-6">
                 <div>
                     <h1 className="text-2xl font-bold text-white">Quản lý người dùng</h1>
-                    <p className="text-sm text-slate-400 mt-1">Admin: xem danh sách, phân quyền, tạo staff</p>
+                    <p className="text-sm text-slate-400 mt-1">Quản trị viên: xem danh sách, phân quyền, tạo nhân sự</p>
                 </div>
 
                 {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>}
@@ -207,7 +250,7 @@ export default function AdminUsersPage() {
                 <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
                     <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
                         <ShieldPlus className="h-4 w-4 text-blue-400" />
-                        Tạo tài khoản staff
+                        Tạo tài khoản nhân sự
                     </h2>
                     <form onSubmit={handleCreateStaff} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         <input
@@ -247,8 +290,8 @@ export default function AdminUsersPage() {
                             value={staffForm.role}
                             onChange={(event) => setStaffForm((prev) => ({ ...prev, role: event.target.value as "admin" | "librarian" }))}
                         >
-                            <option value="librarian">Librarian</option>
-                            <option value="admin">Admin</option>
+                            <option value="librarian">{roleLabel.librarian}</option>
+                            <option value="admin">{roleLabel.admin}</option>
                         </select>
                         <select
                             className="h-10 rounded-xl border border-white/15 bg-slate-800/60 px-3 text-sm text-white"
@@ -269,70 +312,119 @@ export default function AdminUsersPage() {
                             disabled={submitting}
                             className="h-10 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-500 disabled:opacity-60"
                         >
-                            {submitting ? "Đang tạo..." : "Tạo staff"}
+                            {submitting ? "Đang tạo..." : "Tạo nhân sự"}
                         </button>
                     </form>
                 </section>
 
                 <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-                    <h2 className="text-white font-semibold mb-4">Danh sách người dùng</h2>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <h2 className="text-white font-semibold">Danh sách người dùng</h2>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select
+                                className="h-9 rounded-lg border border-white/15 bg-slate-800/60 px-3 text-xs text-white"
+                                value={roleFilter}
+                                onChange={(event) => {
+                                    setRoleFilter(event.target.value as "" | IUser["role"]);
+                                    goToPage(1);
+                                }}
+                            >
+                                <option value="">Tất cả vai trò</option>
+                                <option value="admin">{roleLabel.admin}</option>
+                                <option value="librarian">{roleLabel.librarian}</option>
+                                <option value="user">{roleLabel.user}</option>
+                                <option value="guest">{roleLabel.guest}</option>
+                            </select>
+                            <select
+                                className="h-9 rounded-lg border border-white/15 bg-slate-800/60 px-3 text-xs text-white"
+                                value={statusFilter}
+                                onChange={(event) => {
+                                    setStatusFilter(event.target.value as "" | IUser["status"]);
+                                    goToPage(1);
+                                }}
+                            >
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="active">{statusLabel.active}</option>
+                                <option value="inactive">{statusLabel.inactive}</option>
+                                <option value="banned">{statusLabel.banned}</option>
+                            </select>
+                        </div>
+                    </div>
 
                     {loading ? (
                         <div className="flex items-center gap-2 text-slate-300 text-sm">
                             <Loader2 className="h-4 w-4 animate-spin" /> Đang tải...
                         </div>
+                    ) : users.length === 0 ? (
+                        <p className="text-sm text-slate-400">Không có người dùng phù hợp bộ lọc.</p>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[780px] text-sm">
-                                <thead>
-                                    <tr className="text-left text-slate-400 border-b border-white/10">
-                                        <th className="py-2 pr-3">Tên</th>
-                                        <th className="py-2 pr-3">Email</th>
-                                        <th className="py-2 pr-3">Vai trò</th>
-                                        <th className="py-2 pr-3">Trạng thái</th>
-                                        <th className="py-2 pr-3">Thư viện</th>
-                                        <th className="py-2 text-right">Hành động</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map((item) => (
-                                        <tr key={item._id} className="border-b border-white/5 text-slate-200">
-                                            <td className="py-2 pr-3">{item.fullName}</td>
-                                            <td className="py-2 pr-3">{item.email}</td>
-                                            <td className="py-2 pr-3">{item.role}</td>
-                                            <td className="py-2 pr-3">{item.status}</td>
-                                            <td className="py-2 pr-3">{item.libraryId?.name || "-"}</td>
-                                            <td className="py-2 text-right">
-                                                <div className="inline-flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => void handleViewDetail(item)}
-                                                        className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 inline-flex items-center gap-1"
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5" /> Chi tiết
-                                                    </button>
-                                                    {item.role !== "admin" && (
+                        <div className="space-y-4">
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[780px] text-sm">
+                                    <thead>
+                                        <tr className="text-left text-slate-400 border-b border-white/10">
+                                            <th className="py-2 pr-3">Tên</th>
+                                            <th className="py-2 pr-3">Email</th>
+                                            <th className="py-2 pr-3">Vai trò</th>
+                                            <th className="py-2 pr-3">Trạng thái</th>
+                                            <th className="py-2 pr-3">Thư viện</th>
+                                            <th className="py-2 text-right">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.map((item) => (
+                                            <tr key={item._id} className="border-b border-white/5 text-slate-200">
+                                                <td className="py-2 pr-3">{item.fullName}</td>
+                                                <td className="py-2 pr-3">{item.email}</td>
+                                                <td className="py-2 pr-3">{roleLabel[item.role] ?? item.role}</td>
+                                                <td className="py-2 pr-3">{statusLabel[item.status] ?? item.status}</td>
+                                                <td className="py-2 pr-3">{item.libraryId?.name || "-"}</td>
+                                                <td className="py-2 text-right">
+                                                    <div className="inline-flex items-center gap-2">
                                                         <button
                                                             type="button"
-                                                            onClick={() => void handleRoleUpdate(item, item.role === "librarian" ? "user" : "librarian")}
-                                                            className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-200 hover:bg-blue-500/20"
+                                                            onClick={() => void handleViewDetail(item)}
+                                                            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 hover:bg-emerald-500/20 inline-flex items-center gap-1"
                                                         >
-                                                            {item.role === "librarian" ? "Set user" : "Set librarian"}
+                                                            <Eye className="h-3.5 w-3.5" /> Chi tiết
                                                         </button>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => void handleDeleteUser(item)}
-                                                        className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-200 hover:bg-red-500/20 inline-flex items-center gap-1"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" /> Xóa
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                        {item.role !== "admin" && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void handleRoleUpdate(item, item.role === "librarian" ? "user" : "librarian")}
+                                                                className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-xs text-blue-200 hover:bg-blue-500/20"
+                                                            >
+                                                                {item.role === "librarian" ? "Chuyển thành Bạn đọc" : "Chuyển thành Thủ thư"}
+                                                            </button>
+                                                        )}
+                                                        {item.role !== "admin" && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void handleDeleteUser(item)}
+                                                                className="rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs text-red-200 hover:bg-red-500/20 inline-flex items-center gap-1"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" /> Xóa
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex justify-center pt-2">
+                                <Pagination
+                                    page={page}
+                                    pages={pagination.pages}
+                                    total={pagination.total}
+                                    limit={limit}
+                                    onPageChange={goToPage}
+                                    onLimitChange={setLimit}
+                                    showLimitSelector
+                                />
+                            </div>
                         </div>
                     )}
                 </section>
@@ -360,12 +452,12 @@ export default function AdminUsersPage() {
                                     <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">ID:</span> <span className="text-white break-all">{detailUser._id}</span></div>
                                     <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Họ tên:</span> <span className="text-white">{detailUser.fullName}</span></div>
                                     <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Email:</span> <span className="text-white">{detailUser.email}</span></div>
-                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Phone:</span> <span className="text-white">{detailUser.phone || "-"}</span></div>
-                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Role:</span> <span className="text-white">{detailUser.role}</span></div>
-                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Status:</span> <span className="text-white">{detailUser.status}</span></div>
+                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Số điện thoại:</span> <span className="text-white">{detailUser.phone || "-"}</span></div>
+                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Vai trò:</span> <span className="text-white">{roleLabel[detailUser.role] ?? detailUser.role}</span></div>
+                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Trạng thái:</span> <span className="text-white">{statusLabel[detailUser.status] ?? detailUser.status}</span></div>
                                     <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3 sm:col-span-2"><span className="text-slate-400">Thư viện:</span> <span className="text-white">{detailUser.libraryId ? `${detailUser.libraryId.name} (${detailUser.libraryId.code})` : "-"}</span></div>
-                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Created:</span> <span className="text-white">{new Date(detailUser.createdAt).toLocaleString("vi-VN")}</span></div>
-                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Updated:</span> <span className="text-white">{new Date(detailUser.updatedAt).toLocaleString("vi-VN")}</span></div>
+                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Ngày tạo:</span> <span className="text-white">{new Date(detailUser.createdAt).toLocaleString("vi-VN")}</span></div>
+                                    <div className="rounded-xl border border-white/10 bg-slate-800/60 p-3"><span className="text-slate-400">Cập nhật:</span> <span className="text-white">{new Date(detailUser.updatedAt).toLocaleString("vi-VN")}</span></div>
                                 </div>
                             )}
                         </div>

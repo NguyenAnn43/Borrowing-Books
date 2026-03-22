@@ -13,7 +13,7 @@ export default function DashboardRedirect() {
         if (!user) return;
         if (user.role === "admin") router.replace("/dashboard/admin");
         else if (user.role === "librarian") router.replace("/dashboard/librarian");
-        else if (user.role === "guest") router.replace("/dashboard/guest");
+        else if (user.role === "guest") router.replace("/login");
         else router.replace("/dashboard/user");
     }, [user, router]);
 

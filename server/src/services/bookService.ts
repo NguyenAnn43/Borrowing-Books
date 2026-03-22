@@ -2,7 +2,7 @@ import { ClientSession } from 'mongoose';
 import { Book, BookReview } from '../models';
 import * as wishlistService from './wishlistService';
 import { AppError, formatPagination, sanitizeObject, PAGINATION } from '../utils';
-import { IBook, PaginationMeta } from '../types';
+import { IBook, IUser, PaginationMeta } from '../types';
 import { SearchBooksQuery, CreateBookInput, UpdateBookInput } from '../validators/bookSchema';
 import { BOOK_STATUS } from '../utils/constants';
 
@@ -16,6 +16,28 @@ interface GetBookAlternativesResult {
     alternatives: IBook[];
     matchedBy: 'isbn' | 'title-author';
 }
+
+const toId = (value: unknown): string => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && value !== null && '_id' in (value as Record<string, unknown>)) {
+        const objectId = (value as { _id?: { toString?: () => string } })._id;
+        if (objectId && typeof objectId.toString === 'function') return objectId.toString();
+    }
+    if (typeof (value as { toString?: () => string }).toString === 'function') {
+        return (value as { toString: () => string }).toString();
+    }
+    return '';
+};
+
+const getLibrarianLibraryId = (requestingUser: IUser): string | null => {
+    if (requestingUser.role !== 'librarian') return null;
+    const libraryId = toId(requestingUser.libraryId);
+    if (!libraryId) {
+        throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
+    }
+    return libraryId;
+};
 
 /**
  * Get all books with pagination and filters
@@ -177,18 +199,41 @@ export const getBookAlternatives = async (id: string, userId?: string): Promise<
 /**
  * Create new book
  */
-export const createBook = async (bookData: CreateBookInput): Promise<IBook> => {
-    const book = await Book.create(bookData);
+export const createBook = async (bookData: CreateBookInput, requestingUser: IUser): Promise<IBook> => {
+    const librarianLibraryId = getLibrarianLibraryId(requestingUser);
+
+    if (librarianLibraryId && toId(bookData.libraryId) !== librarianLibraryId) {
+        throw new AppError('Librarian can only create books for the assigned library', 403, 'FORBIDDEN');
+    }
+
+    const payload: CreateBookInput = librarianLibraryId
+        ? { ...bookData, libraryId: librarianLibraryId }
+        : bookData;
+
+    const book = await Book.create(payload);
     return book.populate('libraryId', 'name code') as unknown as IBook;
 };
 
 /**
  * Update book
  */
-export const updateBook = async (id: string, updateData: UpdateBookInput): Promise<IBook> => {
+export const updateBook = async (id: string, updateData: UpdateBookInput, requestingUser: IUser): Promise<IBook> => {
+    const librarianLibraryId = getLibrarianLibraryId(requestingUser);
+    const existingBook = await Book.findById(id) as IBook | null;
+
+    if (!existingBook) {
+        throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    if (librarianLibraryId && toId(existingBook.libraryId) !== librarianLibraryId) {
+        throw new AppError('You are not authorized to manage books of another library', 403, 'FORBIDDEN');
+    }
+
+    const sanitizedUpdate = sanitizeObject(updateData) as UpdateBookInput;
+
     const book = await Book.findByIdAndUpdate(
         id,
-        sanitizeObject(updateData),
+        sanitizedUpdate,
         { new: true, runValidators: true }
     ).populate('libraryId', 'name code') as IBook | null;
 
@@ -202,7 +247,18 @@ export const updateBook = async (id: string, updateData: UpdateBookInput): Promi
 /**
  * Delete book
  */
-export const deleteBook = async (id: string): Promise<IBook> => {
+export const deleteBook = async (id: string, requestingUser: IUser): Promise<IBook> => {
+    const librarianLibraryId = getLibrarianLibraryId(requestingUser);
+    const existingBook = await Book.findById(id) as IBook | null;
+
+    if (!existingBook) {
+        throw new AppError('Book not found', 404, 'BOOK_NOT_FOUND');
+    }
+
+    if (librarianLibraryId && toId(existingBook.libraryId) !== librarianLibraryId) {
+        throw new AppError('You are not authorized to manage books of another library', 403, 'FORBIDDEN');
+    }
+
     const book = await Book.findByIdAndDelete(id) as IBook | null;
 
     if (!book) {

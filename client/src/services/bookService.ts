@@ -22,6 +22,25 @@ export interface GetBookAlternativesResponse {
     matchedBy: "isbn" | "title-author";
 }
 
+export interface BookMutationPayload {
+    isbn?: string;
+    title?: string;
+    author?: string;
+    publisher?: string;
+    publishYear?: number;
+    category?: string;
+    description?: string;
+    coverImage?: string;
+    language?: string;
+    pageCount?: number;
+    tags?: string[];
+    location?: string;
+    libraryId?: string;
+    totalCopies?: number;
+    availableCopies?: number;
+    status?: "available" | "unavailable";
+}
+
 export const bookService = {
     /**
      * Get all books with filters and pagination
@@ -53,7 +72,7 @@ export const bookService = {
     /**
      * Create new book
      */
-    createBook: async (data: Partial<IBook>): Promise<IBook> => {
+    createBook: async (data: BookMutationPayload): Promise<IBook> => {
         const response = await api.post<ApiResponse<IBook>>("/books", data);
         return response.data.data;
     },
@@ -61,7 +80,7 @@ export const bookService = {
     /**
      * Update book
      */
-    updateBook: async (id: string, data: Partial<IBook>): Promise<IBook> => {
+    updateBook: async (id: string, data: BookMutationPayload): Promise<IBook> => {
         const response = await api.put<ApiResponse<IBook>>(`/books/${id}`, data);
         return response.data.data;
     },

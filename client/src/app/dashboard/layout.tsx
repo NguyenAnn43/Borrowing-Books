@@ -55,15 +55,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ...(user?.role === "librarian"
             ? [
                 { href: "/dashboard/borrowings", label: "Quản lý mượn/trả", icon: BookCopy },
-                { href: "/dashboard/reservations", label: "Đặt trước", icon: BookCopy },
-                { href: "/dashboard/reviews", label: "Review", icon: Flag },
+                { href: "/dashboard/reservations", label: "Quản lý đặt trước", icon: BookCopy },
+                { href: "/dashboard/reviews", label: "Quản lý review", icon: Flag },
             ]
             : []),
         ...(user?.role === "admin"
             ? [
                 { href: "/dashboard/users", label: "Người dùng", icon: Users },
                 { href: "/dashboard/libraries", label: "Thư viện", icon: Library },
-                { href: "/dashboard/reviews", label: "Reported Reviews", icon: Flag },
+                { href: "/dashboard/reviews", label: "Review bị báo cáo", icon: Flag },
             ]
             : []),
         { href: "/dashboard/profile", label: "Hồ sơ cá nhân", icon: UserRound },

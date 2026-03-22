@@ -22,7 +22,7 @@ export default function NotificationsPage() {
     const unreadCount = useMemo(() => notifications.filter((item) => !item.isRead).length, [notifications]);
 
     const fetchNotifications = useCallback(
-        async (p?: number) => {
+        async () => {
             // Cancel any pending requests
             if (pendingRequestRef.current) {
                 pendingRequestRef.current.abort();
@@ -45,7 +45,7 @@ export default function NotificationsPage() {
                     updatePagination(result.meta);
                 }
             } catch (fetchError) {
-                if ((fetchError as any)?.name !== 'AbortError') {
+                if ((fetchError as { name?: string })?.name !== "AbortError") {
                     const message = fetchError instanceof Error ? fetchError.message : "Không tải được thông báo.";
                     setError(message);
                 }
@@ -59,9 +59,8 @@ export default function NotificationsPage() {
     );
 
     useEffect(() => {
-        void fetchNotifications(1);
         goToPage(1);
-    }, [unreadOnly]);
+    }, [unreadOnly, goToPage]);
 
     useEffect(() => {
         const timeoutId = setTimeout(() => {
@@ -104,7 +103,7 @@ export default function NotificationsPage() {
     };
 
     return (
-        <RouteGuard allowedRoles={["admin", "librarian", "user", "guest"]}>
+        <RouteGuard allowedRoles={["admin", "librarian", "user"]}>
             <div className="p-8 space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>

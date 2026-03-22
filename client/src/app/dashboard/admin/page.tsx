@@ -24,10 +24,10 @@ export default function AdminDashboard() {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const [usersRes, booksRes, librariesRes, borrowedRes, overdueRes, pendingReservationsRes] = await Promise.all([
+                const [usersRes, booksRes, activeLibrariesRes, borrowedRes, overdueRes, pendingReservationsRes] = await Promise.all([
                     userService.getUsers({ page: 1, limit: 1 }),
                     bookService.getBooks({ page: 1, limit: 1 }),
-                    libraryService.getLibraries({ page: 1, limit: 100 }),
+                    libraryService.getLibraries({ page: 1, limit: 1, status: "active" }),
                     borrowingService.getBorrowings({ page: 1, limit: 1, status: "borrowed" }),
                     borrowingService.getBorrowings({ page: 1, limit: 1, status: "overdue" }),
                     reservationService.getReservations({ page: 1, limit: 1, status: "pending" }),
@@ -36,7 +36,7 @@ export default function AdminDashboard() {
                 setCounts({
                     users: usersRes.pagination.total,
                     books: booksRes.pagination.total,
-                    activeLibraries: librariesRes.libraries.filter((library) => library.status === "active").length,
+                    activeLibraries: activeLibrariesRes.pagination.total,
                     borrowed: borrowedRes.pagination.total,
                     overdue: overdueRes.pagination.total,
                     pendingReservations: pendingReservationsRes.pagination.total,
@@ -96,13 +96,11 @@ export default function AdminDashboard() {
                 {/* Quick actions */}
                 <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-6">
                     <h2 className="text-white font-semibold mb-4">Thao tác nhanh</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {[
                             { label: "Thêm thư viện mới", icon: Library, href: "/dashboard/libraries" },
                             { label: "Quản lý người dùng", icon: Users, href: "/dashboard/users" },
-                            { label: "Reported Reviews", icon: Flag, href: "/dashboard/reviews" },
-                            { label: "Hồ sơ cá nhân", icon: Users, href: "/dashboard/profile" },
-                            { label: "Thông báo", icon: BookCopy, href: "/dashboard/notifications" },
+                            { label: "Review bị báo cáo", icon: Flag, href: "/dashboard/reviews" },
                         ].map((action) => {
                             const Icon = action.icon;
                             return (
