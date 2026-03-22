@@ -1261,18 +1261,6 @@ export default function BorrowingsPage() {
                                                                 </button>
                                                             )}
 
-                                                            {!canViewAll && (item.status === "borrowed" || item.status === "returned" || item.status === "overdue" || item.status === "return_transit") && item.libraryId?._id && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => void openLibraryReviewModal(item.libraryId._id, item.libraryId.name || "Thư viện")}
-                                                                    className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
-                                                                >
-                                                                    <span className="inline-flex items-center gap-1">
-                                                                        <Star className="h-3 w-3" /> ĐG thư viện
-                                                                    </span>
-                                                                </button>
-                                                            )}
-
                                                             {!canViewAll && canPayFineViaVnpay && item.isFined && item.fineAmount > 0 && !item.finePaid && (
                                                                 <button
                                                                     type="button"

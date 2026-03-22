@@ -10,6 +10,28 @@ type Message = {
   content: string;
 };
 
+const renderMessageContent = (content: string) => {
+  const parts = content.split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, idx) => {
+    const isUrl = /^https?:\/\//.test(part);
+    if (!isUrl) {
+      return <span key={`text-${idx}`}>{part}</span>;
+    }
+
+    return (
+      <a
+        key={`url-${idx}`}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline decoration-2 underline-offset-2 break-all text-blue-300 hover:text-blue-200"
+      >
+        {part}
+      </a>
+    );
+  });
+};
+
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -99,7 +121,7 @@ export default function Chatbot() {
                     : "bg-white text-gray-800 self-start rounded-bl-none border border-gray-200 shadow-sm"
                 }`}
               >
-                {msg.content}
+                {msg.role === "bot" ? renderMessageContent(msg.content) : msg.content}
               </div>
             ))}
             {isLoading && (
