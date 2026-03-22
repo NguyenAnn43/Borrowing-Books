@@ -118,6 +118,37 @@ export interface IReservation extends Document {
     checkExpiry(): void;
 }
 
+// Transit request types
+export interface ITransitRequest extends Document {
+    _id: Types.ObjectId;
+    bookId: Types.ObjectId;
+    sourceLibraryId: Types.ObjectId;
+    targetLibraryId: Types.ObjectId;
+    /** Target-side book record after receive (existing or newly created) */
+    targetBookId?: Types.ObjectId;
+    quantity: number;
+    requestedBy: Types.ObjectId;
+    requestedForUserId?: Types.ObjectId;
+    reviewedBy?: Types.ObjectId;
+    dispatchedBy?: Types.ObjectId;
+    receivedBy?: Types.ObjectId;
+    cancelledBy?: Types.ObjectId;
+    status: 'pending' | 'approved' | 'rejected' | 'in_transit' | 'completed' | 'cancelled';
+    note?: string;
+    decisionNote?: string;
+    dispatchNote?: string;
+    receiveNote?: string;
+    cancelReason?: string;
+    requestedAt: Date;
+    approvedAt?: Date;
+    rejectedAt?: Date;
+    dispatchedAt?: Date;
+    receivedAt?: Date;
+    cancelledAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 // Notification types
 export interface INotification extends Document {
     _id: Types.ObjectId;

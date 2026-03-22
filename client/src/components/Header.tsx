@@ -14,10 +14,10 @@ interface HeaderProps {
 }
 
 const HEADER_NAV_ITEMS = [
-  { label: "Home", href: "/" },
-  { label: "Browse", href: "#browse" },
-  { label: "Libraries", href: "/libraries" },
-  { label: "About", href: "#about" },
+  { label: "Trang chủ", href: "/" },
+  { label: "Khám phá sách", href: "#browse" },
+  { label: "Thư viện", href: "/libraries" },
+  { label: "Hướng dẫn", href: "#about" },
 ];
 
 export function Header({
@@ -79,7 +79,7 @@ export function Header({
                 className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg rounded-l-none border-none border-l-0 bg-gray-100 px-4 pl-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-none focus:outline-0 focus:ring-0 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-700"
                 value={searchText}
                 onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Quick search..."
+                placeholder="Tìm nhanh sách hoặc tác giả..."
               />
             </form>
           </label>
@@ -145,7 +145,7 @@ export function Header({
         ) : (
           <>
             <Link href="/login" className="flex h-10 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#2b6cee] px-4 text-sm font-bold leading-normal tracking-[0.015em] text-white transition-all duration-300 hover:bg-blue-700 hover:shadow-lg active:scale-95 dark:hover:bg-blue-600">
-              <span className="truncate">Sign In</span>
+              <span className="truncate">Đăng nhập</span>
             </Link>
 
             <Link

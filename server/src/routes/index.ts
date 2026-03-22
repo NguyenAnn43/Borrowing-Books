@@ -10,6 +10,7 @@ import notificationRoutes from './notificationRoutes';
 import wishlistRoutes from './wishlistRoutes';
 import reviewRoutes from './reviewRoutes';
 import paymentRoutes from './paymentRoutes';
+import transitRoutes from './transitRoutes';
 
 const router: IRouter = Router();
 
@@ -24,6 +25,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/wishlists', wishlistRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/transits', transitRoutes);
 
 // Health check
 router.get('/health', (req: Request, res: Response) => {

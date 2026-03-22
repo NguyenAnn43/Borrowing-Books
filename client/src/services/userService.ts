@@ -19,6 +19,12 @@ export interface GetUsersParams {
     status?: IUser["status"];
 }
 
+export interface SearchReadersParams {
+    q?: string;
+    page?: number;
+    limit?: number;
+}
+
 export interface GetUsersResponse {
     users: IUser[];
     pagination: IPagination;
@@ -45,6 +51,14 @@ export const userService = {
     createStaff: async (data: CreateStaffPayload): Promise<IUser> => {
         const response = await api.post<ApiResponse<IUser>>("/users/staff", data);
         return response.data.data;
+    },
+
+    searchReaders: async (params: SearchReadersParams = {}): Promise<GetUsersResponse> => {
+        const response = await api.get<ApiResponse<IUser[]>>("/users/readers/search", { params });
+        return {
+            users: response.data.data,
+            pagination: response.data.meta as IPagination,
+        };
     },
 
     getUserById: async (userId: string): Promise<IUser> => {

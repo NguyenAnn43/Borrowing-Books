@@ -104,6 +104,39 @@ export interface IReservation {
     updatedAt: string;
 }
 
+export interface ITransitRequest {
+    _id: string;
+    bookId: Pick<IBook, "_id" | "title" | "author" | "coverImage"> & {
+        isbn?: string;
+        availableCopies?: number;
+        totalCopies?: number;
+    };
+    sourceLibraryId: Pick<ILibrary, "_id" | "name" | "code">;
+    targetLibraryId: Pick<ILibrary, "_id" | "name" | "code">;
+    targetBookId?: Pick<IBook, "_id" | "title" | "author">;
+    quantity: number;
+    requestedBy: Pick<IUser, "_id" | "fullName" | "email">;
+    requestedForUserId?: Pick<IUser, "_id" | "fullName" | "email">;
+    reviewedBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    dispatchedBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    receivedBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    cancelledBy?: Pick<IUser, "_id" | "fullName" | "email">;
+    status: "pending" | "approved" | "rejected" | "in_transit" | "completed" | "cancelled";
+    note?: string;
+    decisionNote?: string;
+    dispatchNote?: string;
+    receiveNote?: string;
+    cancelReason?: string;
+    requestedAt: string;
+    approvedAt?: string;
+    rejectedAt?: string;
+    dispatchedAt?: string;
+    receivedAt?: string;
+    cancelledAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 // Notification types
 export interface INotification {
     _id: string;

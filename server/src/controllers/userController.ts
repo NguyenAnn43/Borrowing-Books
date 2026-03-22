@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Types } from 'mongoose';
 import { User } from '../models';
 import { asyncHandler, AppError, formatPagination, ROLES } from '../utils';
 import { IUser } from '../types';
@@ -28,6 +29,54 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
         success: true,
         data: users,
         meta: formatPagination(Number(page), Number(limit), total),
+    });
+});
+
+/**
+ * Search reader candidates for librarian/admin flows (e.g. transit request binding)
+ */
+export const searchReaderCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const { q = '', page = 1, limit = 10 } = req.query;
+    const keyword = String(q).trim();
+    const pageNumber = Math.max(1, Number(page) || 1);
+    const rawLimit = Number(limit) || 10;
+    const limitNumber = Math.max(1, Math.min(rawLimit, 20));
+
+    const query: Record<string, unknown> = {
+        role: ROLES.USER,
+        status: 'active',
+    };
+
+    if (keyword) {
+        const safeRegex = { $regex: keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+        const orConditions: Record<string, unknown>[] = [
+            { fullName: safeRegex },
+            { email: safeRegex },
+            { phone: safeRegex },
+        ];
+
+        if (Types.ObjectId.isValid(keyword)) {
+            orConditions.push({ _id: new Types.ObjectId(keyword) });
+        }
+
+        query.$or = orConditions;
+    }
+
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const [users, total] = await Promise.all([
+        User.find(query)
+            .select('_id fullName email phone')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limitNumber) as Promise<IUser[]>,
+        User.countDocuments(query),
+    ]);
+
+    res.json({
+        success: true,
+        data: users,
+        meta: formatPagination(pageNumber, limitNumber, total),
     });
 });
 

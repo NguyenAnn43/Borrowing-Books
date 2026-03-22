@@ -42,6 +42,15 @@ export const RESERVATION_STATUS = {
     EXPIRED: 'expired',
 } as const;
 
+export const TRANSIT_STATUS = {
+    PENDING: 'pending',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    IN_TRANSIT: 'in_transit',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+} as const;
+
 export const NOTIFICATION_TYPE = {
     BORROWING: 'borrowing',
     RESERVATION: 'reservation',
@@ -106,6 +115,7 @@ export type LibraryStatus = typeof LIBRARY_STATUS[keyof typeof LIBRARY_STATUS];
 export type BookStatus = typeof BOOK_STATUS[keyof typeof BOOK_STATUS];
 export type BorrowingStatus = typeof BORROWING_STATUS[keyof typeof BORROWING_STATUS];
 export type ReservationStatus = typeof RESERVATION_STATUS[keyof typeof RESERVATION_STATUS];
+export type TransitStatus = typeof TRANSIT_STATUS[keyof typeof TRANSIT_STATUS];
 export type NotificationType = typeof NOTIFICATION_TYPE[keyof typeof NOTIFICATION_TYPE];
 export type ReviewReportStatus = typeof REVIEW_REPORT_STATUS[keyof typeof REVIEW_REPORT_STATUS];
 export type ReviewAdminAction = typeof REVIEW_ADMIN_ACTION[keyof typeof REVIEW_ADMIN_ACTION];

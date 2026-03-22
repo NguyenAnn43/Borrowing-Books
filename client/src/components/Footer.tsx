@@ -4,27 +4,27 @@ import Link from "next/link";
 
 const FOOTER_LINK_SECTIONS = [
   {
-    title: "Services",
+    title: "Dịch vụ",
     links: [
-      { label: "E-Books", href: "/dashboard/books" },
-      { label: "Audiobooks", href: "/dashboard/books" },
-      { label: "Local Events", href: "#about" },
+      { label: "Tìm sách", href: "/dashboard/books" },
+      { label: "Mượn và đặt trước", href: "/dashboard/borrowings" },
+      { label: "Danh sách yêu thích", href: "/dashboard/wishlist" },
     ],
   },
   {
-    title: "Platform",
+    title: "Dành cho",
     links: [
-      { label: "For Librarians", href: "/login" },
-      { label: "API Access", href: "/login" },
-      { label: "Mobile App", href: "/register" },
+      { label: "Bạn đọc", href: "/login" },
+      { label: "Thủ thư", href: "/login" },
+      { label: "Quản trị viên", href: "/login" },
     ],
   },
   {
-    title: "Company",
+    title: "Hỗ trợ",
     links: [
-      { label: "About Us", href: "#about" },
-      { label: "Support", href: "mailto:support@mosa-library.local" },
-      { label: "Contact", href: "mailto:contact@mosa-library.local" },
+      { label: "Hướng dẫn sử dụng", href: "#about" },
+      { label: "Email hỗ trợ", href: "mailto:support@mosa-library.local" },
+      { label: "Liên hệ", href: "mailto:contact@mosa-library.local" },
     ],
   },
 ];
@@ -53,7 +53,7 @@ export function Footer() {
               <span className="font-extrabold text-[#111318] dark:text-white">Mosa</span>
             </Link>
             <p className="mt-3 text-xs font-normal leading-relaxed text-[#616f89] dark:text-gray-400">
-              Your gateway to world&apos;s knowledge. Access millions of titles from 500+ partnered local libraries.
+              Nền tảng tra cứu và mượn sách liên thư viện, giúp bạn đọc tìm đúng sách và mượn nhanh hơn.
             </p>
           </div>
 

@@ -11,6 +11,7 @@ const router: IRouter = Router();
 // Admin only routes
 router.get('/', protect, authorize(ROLES.ADMIN), userController.getUsers);
 router.post('/staff', protect, authorize(ROLES.ADMIN), validate(createStaffSchema), userController.createStaffAccount);
+router.get('/readers/search', protect, authorize(ROLES.LIBRARIAN, ROLES.ADMIN), userController.searchReaderCandidates);
 
 router.get(
     '/:id',

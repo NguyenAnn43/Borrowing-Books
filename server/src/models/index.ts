@@ -9,3 +9,4 @@ export { default as BookReview } from './BookReview';
 export { default as LibraryReview } from './LibraryReview';
 export { default as ReviewReport } from './ReviewReport';
 export { default as Payment } from './Payment';
+export { default as TransitRequest } from './TransitRequest';
