@@ -40,7 +40,7 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
         throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
     }
 
-    const { page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
+    const { q, page = PAGINATION.DEFAULT_PAGE, limit = PAGINATION.DEFAULT_LIMIT, status, libraryId, userId } = params;
 
     const query: Record<string, unknown> = {};
     if (status) query.status = status;
@@ -54,11 +54,37 @@ export const getBorrowings = async (params: GetBorrowingsQuery, requestingUser: 
         query.libraryId = libraryId;
     }
 
+    // Add search by book title or user name
+    if (q) {
+        const searchQuery = { $regex: q, $options: 'i' };
+        // Search in related collections
+        const matchingBooks = await Book.find({ title: searchQuery }).select('_id');
+        const bookIds = matchingBooks.map((b) => b._id);
+        if (bookIds.length > 0) {
+            query.bookId = { $in: bookIds };
+        } else {
+            // Also try text search in users
+            const matchingUsers = await User.find({ $text: { $search: q } }).select('_id');
+            if (matchingUsers.length > 0) {
+                query.userId = { $in: matchingUsers.map((u) => u._id) };
+            } else {
+                // If no matches, return empty result
+                return { borrowings: [], pagination: formatPagination(page, limit, 0) };
+            }
+        }
+    }
+
     const skip = (page - 1) * Math.min(limit, PAGINATION.MAX_LIMIT);
     const actualLimit = Math.min(limit, PAGINATION.MAX_LIMIT);
 
     const [borrowings, total] = await Promise.all([
-        Borrowing.find(query).skip(skip).limit(actualLimit).sort({ createdAt: -1 }) as Promise<IBorrowing[]>,
+        Borrowing.find(query)
+            .skip(skip)
+            .limit(actualLimit)
+            .sort({ createdAt: -1 })
+            .populate('bookId', 'title author')
+            .populate('userId', 'name email')
+            .populate('libraryId', 'name') as Promise<IBorrowing[]>,
         Borrowing.countDocuments(query),
     ]);
 
@@ -131,6 +157,15 @@ export const createBorrowing = async (userId: string, data: CreateBorrowingInput
     const user = await User.findById(userId) as IUser | null;
     if (!user) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
 
+    // Check if user has outstanding fines
+    if (user.isFined) {
+        throw new AppError(
+            'You have outstanding fines. Please pay all pending fines before borrowing more books.',
+            400,
+            'USER_HAS_FINES'
+        );
+    }
+
     const activeBorrowings = await Borrowing.countDocuments({
         userId,
         status: { $in: [BORROWING_STATUS.PENDING, BORROWING_STATUS.BORROWED] },
@@ -158,8 +193,8 @@ export const createBorrowing = async (userId: string, data: CreateBorrowingInput
 
     await notificationService.create({
         userId,
-        title: 'Borrowing Request Created',
-        message: `Your request to borrow "${book.title}" has been submitted.`,
+        title: 'Yêu cầu mượn sách',
+        message: `Yêu cầu mượn "${book.title}" đã được gửi thành công.`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -177,6 +212,15 @@ export const createBulkBorrowing = async (userId: string, data: CreateBulkBorrow
 
     const user = await User.findById(userId) as IUser | null;
     if (!user) throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+
+    // Check if user has outstanding fines
+    if (user.isFined) {
+        throw new AppError(
+            'You have outstanding fines. Please pay all pending fines before borrowing more books.',
+            400,
+            'USER_HAS_FINES'
+        );
+    }
 
     const activeBorrowingsCount = await Borrowing.countDocuments({
         userId,
@@ -247,8 +291,8 @@ export const createBulkBorrowing = async (userId: string, data: CreateBulkBorrow
 
     await notificationService.create({
         userId,
-        title: 'Bulk Borrowing Request Created',
-        message: `Your request to borrow ${borrowings.length} book(s) has been submitted.`,
+        title: 'Yêu cầu mượn sách',
+        message: `Yêu cầu mượn ${borrowings.length} cuốn sách đã được gửi thành công.`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -297,8 +341,8 @@ export const confirmPickup = async (id: string, requestingUser: IUser): Promise<
         // Notification outside transaction (non-critical)
         await notificationService.create({
             userId: toId(borrowing.userId),
-            title: 'Book Picked Up',
-            message: `You have picked up the book. Due date: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
+            title: 'Nhận sách thành công',
+            message: `Bạn đã nhận sách. Hạn trả: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
             type: NOTIFICATION_TYPE.BORROWING,
         });
 
@@ -344,10 +388,16 @@ export const returnBook = async (id: string, requestingUser: IUser): Promise<IBo
         if (overdueDays > 0) {
             borrowing.fineAmount = calculateFine(overdueDays, BORROWING_SETTINGS.OVERDUE_FINE_PER_DAY);
             borrowing.isFined = true;
+            // Update user.isFined flag when book is returned late
+            await User.findByIdAndUpdate(borrowing.userId, { isFined: true }, { session });
+            // Keep status as OVERDUE if book is returned late
+            borrowing.status = BORROWING_STATUS.OVERDUE;
+        } else {
+            // Set status to RETURNED if book is returned on time
+            borrowing.status = BORROWING_STATUS.RETURNED;
         }
 
         const now = new Date();
-        borrowing.status = BORROWING_STATUS.RETURNED;
         borrowing.actualReturnDate = now;
         // returnDate is mirrored automatically in pre-save hook
         await borrowing.save({ session });
@@ -366,13 +416,13 @@ export const returnBook = async (id: string, requestingUser: IUser): Promise<IBo
         }
 
         // Notification outside transaction
-        let message = 'You have returned the book.';
+        let message = 'Bạn đã trả sách thành công.';
         if (borrowing.isFined) {
-            message += ` Fine amount: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND. Please pay at the library.`;
+            message += ` Tiền phạt: ${borrowing.fineAmount.toLocaleString('vi-VN')} VND. Vui lòng thanh toán tại thư viện.`;
         }
         await notificationService.create({
             userId: toId(borrowing.userId),
-            title: 'Book Returned',
+            title: 'Trả sách thành công',
             message,
             type: NOTIFICATION_TYPE.BORROWING,
         });
@@ -408,8 +458,8 @@ export const cancelBorrowing = async (id: string, userId: string): Promise<IBorr
 
     await notificationService.create({
         userId,
-        title: 'Borrowing Cancelled',
-        message: 'Your borrowing request has been cancelled.',
+        title: 'Hủy yêu cầu mượn',
+        message: 'Yêu cầu mượn sách của bạn đã được hủy.',
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -446,8 +496,8 @@ export const renewBorrowing = async (id: string, userId: string): Promise<IBorro
 
     await notificationService.create({
         userId,
-        title: 'Borrowing Renewed',
-        message: `Your borrowing has been renewed. New due date: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
+        title: 'Gia hạn thành công',
+        message: `Yêu cầu mượn sách của bạn đã được gia hạn. Hạn trả mới: ${borrowing.dueDate.toLocaleDateString('vi-VN')}`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 
@@ -456,10 +506,11 @@ export const renewBorrowing = async (id: string, userId: string): Promise<IBorro
 
 /**
  * Mark a borrowing's fine as paid (librarian/admin only).
+ * Also clears user.isFined flag if all fines are now paid.
  */
-export const payFine = async (id: string, requestingUser: IUser): Promise<IBorrowing> => {
+export const payFine = async (id: string, requestingUser?: IUser): Promise<IBorrowing> => {
     // Librarians must be assigned to a library
-    if (requestingUser.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
+    if (requestingUser?.role === ROLES.LIBRARIAN && !requestingUser.libraryId) {
         throw new AppError('You are not assigned to any library', 403, 'NO_LIBRARY_ASSIGNED');
     }
 
@@ -467,11 +518,22 @@ export const payFine = async (id: string, requestingUser: IUser): Promise<IBorro
     if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
     // Librarians can only manage borrowings for their own library
-    if (requestingUser.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
+    if (requestingUser?.role === ROLES.LIBRARIAN && requestingUser.libraryId) {
         if (toId(borrowing.libraryId) !== toId(requestingUser.libraryId)) {
             throw new AppError('You are not authorized to manage this borrowing', 403, 'FORBIDDEN');
         }
     }
+
+    return markFineAsPaidByBorrowingId(id);
+};
+
+/**
+ * Mark a borrowing fine as paid by borrowing ID.
+ * Shared by librarian manual action and VNPay callback.
+ */
+export const markFineAsPaidByBorrowingId = async (id: string): Promise<IBorrowing> => {
+    const borrowing = await Borrowing.findById(id) as IBorrowing | null;
+    if (!borrowing) throw new AppError('Borrowing not found', 404, 'BORROWING_NOT_FOUND');
 
     if (!borrowing.isFined) {
         throw new AppError('This borrowing has no outstanding fine', 400, 'NO_FINE');
@@ -484,10 +546,20 @@ export const payFine = async (id: string, requestingUser: IUser): Promise<IBorro
     borrowing.finePaid = true;
     await borrowing.save();
 
+    const unpaidFines = await Borrowing.countDocuments({
+        userId: borrowing.userId,
+        isFined: true,
+        finePaid: false,
+    });
+
+    if (unpaidFines === 0) {
+        await User.findByIdAndUpdate(borrowing.userId, { isFined: false });
+    }
+
     await notificationService.create({
         userId: toId(borrowing.userId),
-        title: 'Fine Paid',
-        message: `Your fine of ${borrowing.fineAmount.toLocaleString('vi-VN')} VND has been recorded as paid.`,
+        title: 'Thanh toán phạt thành công',
+        message: `Tiền phạt ${borrowing.fineAmount.toLocaleString('vi-VN')} VND đã được ghi nhận.`,
         type: NOTIFICATION_TYPE.BORROWING,
     });
 

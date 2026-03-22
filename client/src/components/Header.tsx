@@ -31,6 +31,7 @@ export function Header({
   const { user, isAuthenticated, logout } = useAuthStore();
   const cartItems = useCartStore((state) => state.items);
   const isSignedIn = isAuthenticated && Boolean(user) && user?.role !== "guest";
+  const canUseCart = user?.role === "user";
 
   const dashboardHref = user?.role === "admin"
     ? "/dashboard/admin"
@@ -86,14 +87,16 @@ export function Header({
 
         {isSignedIn ? (
           <>
-            <Link href="/dashboard/cart" className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#111318] transition-all duration-300 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800">
-              <ShoppingCart className="h-5 w-5" />
-              {cartItems.length > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {cartItems.length}
-                </span>
-              )}
-            </Link>
+            {canUseCart ? (
+              <Link href="/dashboard/cart" className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#111318] transition-all duration-300 hover:bg-gray-100 dark:text-white dark:hover:bg-gray-800">
+                <ShoppingCart className="h-5 w-5" />
+                {cartItems.length > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                    {cartItems.length}
+                  </span>
+                )}
+              </Link>
+            ) : null}
 
             <div className="relative" ref={accountMenuRef}>
               <button

@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodObject, ZodRawShape } from 'zod';
+import { ZodTypeAny } from 'zod';
 import { AppError } from '../utils';
 
 interface ValidationSchema {
-    body?: ZodObject<ZodRawShape>;
-    params?: ZodObject<ZodRawShape>;
-    query?: ZodObject<ZodRawShape>;
+    body?: ZodTypeAny;
+    params?: ZodTypeAny;
+    query?: ZodTypeAny;
 }
 
 interface ValidationError {

@@ -1,5 +1,5 @@
 import { ClientSession } from 'mongoose';
-import { Book } from '../models';
+import { Book, BookReview } from '../models';
 import * as wishlistService from './wishlistService';
 import { AppError, formatPagination, sanitizeObject, PAGINATION } from '../utils';
 import { IBook, PaginationMeta } from '../types';
@@ -56,6 +56,35 @@ export const getBooks = async (params: SearchBooksQuery & { userId?: string }): 
         });
     }
 
+    if (books.length > 0) {
+        const bookIds = books.map((book) => book._id);
+        const ratingRows = await BookReview.aggregate<{
+            _id: string;
+            avgStars: number;
+        }>([
+            {
+                $match: {
+                    bookId: { $in: bookIds },
+                    isHidden: false,
+                },
+            },
+            {
+                $group: {
+                    _id: '$bookId',
+                    avgStars: { $avg: '$stars' },
+                },
+            },
+        ]);
+
+        const ratingMap = new Map(
+            ratingRows.map((row) => [String(row._id), Number(row.avgStars.toFixed(1))])
+        );
+
+        books.forEach((book) => {
+            book.averageRating = ratingMap.get(book._id.toString()) ?? undefined;
+        });
+    }
+
     return {
         books,
         pagination: formatPagination(page, actualLimit, total),
@@ -74,6 +103,27 @@ export const getBookById = async (id: string, userId?: string): Promise<IBook> =
     if (userId) {
         const wishlistedBookIds = await wishlistService.getWishlistedBookIdSet(userId, [book._id.toString()]);
         book.isWishlisted = wishlistedBookIds.has(book._id.toString());
+    }
+
+    const ratingRow = await BookReview.aggregate<{ avgStars: number }>([
+        {
+            $match: {
+                bookId: book._id,
+                isHidden: false,
+            },
+        },
+        {
+            $group: {
+                _id: '$bookId',
+                avgStars: { $avg: '$stars' },
+            },
+        },
+    ]);
+
+    if (ratingRow.length > 0) {
+        book.averageRating = Number(ratingRow[0]!.avgStars.toFixed(1));
+    } else {
+        book.averageRating = undefined;
     }
 
     return book;

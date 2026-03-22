@@ -8,6 +8,7 @@ export interface CreateBorrowingData {
 }
 
 export interface GetBorrowingsParams {
+    q?: string;
     page?: number;
     limit?: number;
     status?: "pending" | "borrowed" | "returned" | "overdue" | "cancelled";

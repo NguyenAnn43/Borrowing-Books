@@ -11,10 +11,29 @@ import { RouteGuard } from "@/components/RouteGuard";
 const FALLBACK_COVER =
     "https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=900&auto=format&fit=crop";
 
+const getApiErrorCode = (err: unknown): string | undefined => {
+    if (!err || typeof err !== "object") return undefined;
+    const response = (err as { response?: { data?: { error?: { code?: string } } } }).response;
+    return response?.data?.error?.code;
+};
+
+const getApiErrorMessage = (err: unknown): string | undefined => {
+    if (!err || typeof err !== "object") return undefined;
+
+    const asAny = err as {
+        message?: string;
+        response?: { data?: { error?: { message?: string }; message?: string } };
+    };
+
+    return asAny.response?.data?.error?.message
+        || asAny.response?.data?.message
+        || asAny.message;
+};
+
 export default function CartPage() {
     const router = useRouter();
     const { items, removeFromCart, clearCart } = useCartStore();
-    const [submitting, setSubmitting] = useState(false);
+    const [submittingLibraryId, setSubmittingLibraryId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
@@ -37,7 +56,7 @@ export default function CartPage() {
     }, {} as Record<string, { libraryId: string; libraryName: string; items: typeof items }>);
 
     const handleCheckout = async (libraryId: string, bookIds: string[]) => {
-        setSubmitting(true);
+        setSubmittingLibraryId(libraryId);
         setError(null);
         setSuccess(null);
         
@@ -104,27 +123,36 @@ export default function CartPage() {
                 // If cart is now empty, go to borrowings page
                 router.push("/dashboard/borrowings");
             }
-        } catch (err: any) {
-            console.error("Bulk borrowing error:", err.response?.data || err);
-            const errorCode = err.response?.data?.error?.code;
+        } catch (err: unknown) {
+            const errorCode = getApiErrorCode(err);
             const fallbackByCode: Record<string, string> = {
                 BORROW_LIMIT_REACHED: "Bạn đã đạt giới hạn số lượng sách được mượn.",
                 ALREADY_BORROWED: "Một hoặc nhiều sách đã có yêu cầu mượn trước đó.",
                 BOOK_UNAVAILABLE: "Một hoặc nhiều sách đã hết trước khi gửi yêu cầu.",
                 LIBRARY_MISMATCH: "Giỏ có sách không cùng thư viện. Vui lòng gửi theo từng thư viện.",
+                USER_HAS_FINES: "Bạn có tiền phạt chưa trả. Vui lòng thanh toán trước khi mượn sách khác.",
             };
-            const errorMsg = fallbackByCode[errorCode]
-                || err.response?.data?.error?.message
-                || err.response?.data?.message
-                || (err instanceof Error ? err.message : "Đã có lỗi xảy ra. Không thể tạo yêu cầu mượn sách.");
+
+            // Keep dev diagnostics without triggering noisy Next.js "Console Error" overlay.
+            if (process.env.NODE_ENV === "development") {
+                console.warn("Bulk borrowing failed", {
+                    code: errorCode,
+                    message: getApiErrorMessage(err),
+                });
+            }
+
+            const mappedMessage = errorCode ? fallbackByCode[errorCode] : undefined;
+            const errorMsg = mappedMessage
+                || getApiErrorMessage(err)
+                || "Đã có lỗi xảy ra. Không thể tạo yêu cầu mượn sách.";
             setError(errorMsg);
         } finally {
-            setSubmitting(false);
+            setSubmittingLibraryId(null);
         }
     };
 
     return (
-        <RouteGuard>
+        <RouteGuard allowedRoles={["user"]}>
             <div className="p-8 max-w-5xl mx-auto">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
@@ -227,10 +255,10 @@ export default function CartPage() {
                                     </p>
                                     <button
                                         onClick={() => handleCheckout(group.libraryId, group.items.map(i => i.book._id))}
-                                        disabled={submitting || group.items.every(i => i.book.availableCopies <= 0)}
+                                        disabled={Boolean(submittingLibraryId) || group.items.every(i => i.book.availableCopies <= 0)}
                                         className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2"
                                     >
-                                        {submitting ? (
+                                        {submittingLibraryId === group.libraryId ? (
                                             <>
                                                 <Loader2 className="h-4 w-4 animate-spin" />
                                                 Đang xử lý...

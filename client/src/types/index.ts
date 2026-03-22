@@ -50,6 +50,7 @@ export interface IBook {
     totalCopies: number;
     availableCopies: number;
     wishlistCount?: number;
+    averageRating?: number;
     isWishlisted?: boolean;
     status: "available" | "unavailable";
     createdAt: string;
@@ -111,6 +112,109 @@ export interface INotification {
     type: "borrowing" | "reservation" | "overdue" | "system";
     isRead: boolean;
     createdAt: string;
+}
+
+// Review types
+export interface IReviewUserSnapshot {
+    _id: string;
+    fullName?: string;
+    avatar?: string;
+}
+
+export interface IBookReview {
+    _id: string;
+    userId: IReviewUserSnapshot;
+    bookId: Pick<IBook, '_id' | 'title' | 'author' | 'coverImage'>;
+    libraryId: Pick<ILibrary, '_id' | 'name' | 'code'>;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    hiddenReason?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ILibraryReview {
+    _id: string;
+    userId: IReviewUserSnapshot;
+    libraryId: Pick<ILibrary, '_id' | 'name' | 'code'>;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    hiddenReason?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface IReviewReport {
+    _id: string;
+    reviewType: 'book' | 'library';
+    reviewId: IBookReview | ILibraryReview | string;
+    reporterId: Pick<IUser, '_id' | 'fullName' | 'email' | 'role'>;
+    reason: string;
+    status: 'pending' | 'resolved';
+    adminAction?: 'keep' | 'hide' | 'delete';
+    adminNote?: string;
+    resolvedBy?: Pick<IUser, '_id' | 'fullName' | 'role'>;
+    resolvedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ILibrarianReviewDashboardItem {
+    reviewType: 'book' | 'library';
+    reviewId: string;
+    stars: number;
+    comment?: string;
+    images: string[];
+    isHidden: boolean;
+    createdAt: string;
+    user: {
+        _id: string;
+        fullName?: string;
+        avatar?: string;
+    };
+    library: {
+        _id: string;
+        name?: string;
+        code?: string;
+    };
+    book?: {
+        _id: string;
+        title?: string;
+        author?: string;
+        coverImage?: string;
+    };
+}
+
+export interface ILibrarianReviewDashboard {
+    latest: ILibrarianReviewDashboardItem[];
+    lowStar: ILibrarianReviewDashboardItem[];
+    withImages: ILibrarianReviewDashboardItem[];
+}
+
+export interface IPayment {
+    _id: string;
+    userId?: Pick<IUser, "_id" | "fullName" | "email">;
+    borrowingId?: {
+        _id: string;
+        bookId?: Pick<IBook, "_id" | "title" | "author">;
+        dueDate?: string;
+        fineAmount?: number;
+        status?: IBorrowing["status"];
+        finePaid?: boolean;
+    };
+    provider: "vnpay";
+    status: "pending" | "success" | "failed";
+    amount: number;
+    txnRef: string;
+    vnpTxnNo?: string;
+    vnpResponseCode?: string;
+    paidAt?: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 // Auth types

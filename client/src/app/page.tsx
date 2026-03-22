@@ -70,7 +70,7 @@ export default function HomePage() {
   const [wishlistMessageType, setWishlistMessageType] = useState<"info" | "error">("info");
   const [wishlistedBookIds, setWishlistedBookIds] = useState<Record<string, boolean>>({});
   const [wishlistLoadingBookId, setWishlistLoadingBookId] = useState<string | null>(null);
-  const { user, getCurrentUser } = useAuthStore();
+const { user, getCurrentUser } = useAuthStore();
 
   const loadBooks = useCallback(async (nextQuery = "", nextCategory = "") => {
     setIsLoadingBooks(true);
@@ -172,8 +172,7 @@ export default function HomePage() {
         bg: CATEGORY_STYLE_POOL[index % CATEGORY_STYLE_POOL.length].bg,
       }));
   }, [allBooks]);
-
-  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
+const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuery = searchText.trim();
     setQuery(normalizedQuery);
@@ -212,11 +211,13 @@ export default function HomePage() {
       if (currentWishlisted) {
         const result = await wishlistService.removeFromWishlist(book._id);
         setWishlistedBookIds((prev) => ({ ...prev, [book._id]: result.isWishlisted }));
+        setBooks((prev) => prev.map((b) => b._id === book._id ? { ...b, wishlistCount: result.wishlistCount } : b));
         setWishlistMessageType("info");
         setWishlistMessage("Đã bỏ khỏi wishlist.");
       } else {
         const result = await wishlistService.addToWishlist(book._id);
         setWishlistedBookIds((prev) => ({ ...prev, [book._id]: result.isWishlisted }));
+        setBooks((prev) => prev.map((b) => b._id === book._id ? { ...b, wishlistCount: result.wishlistCount } : b));
         setWishlistMessageType("info");
         setWishlistMessage("Đã thêm vào wishlist.");
       }
@@ -248,7 +249,7 @@ export default function HomePage() {
         @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
 
         .material-symbols-outlined {
-          font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
         }
 
         @keyframes fade-in {
@@ -300,7 +301,7 @@ export default function HomePage() {
                 <input
                   className="form-input h-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl rounded-l-none rounded-r-none border border-l-0 border-r-0 border-white/20 bg-white px-[15px] pl-2 pr-2 text-sm font-normal leading-normal text-[#111318] placeholder:text-[#616f89] transition-all duration-300 focus:bg-gray-50 focus:border-white/30 focus:outline-0 focus:ring-0 sm:text-lg"
                   value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
+onChange={(event) => setSearchText(event.target.value)}
                   placeholder="Search by title, author, or ISBN"
                 />
                 <div className="flex items-center justify-center rounded-r-xl border border-l-0 border-white/20 bg-white pr-[7px]">
@@ -353,13 +354,29 @@ export default function HomePage() {
                       className="group flex min-w-48 max-w-48 flex-col gap-3 rounded-lg transition-all duration-300 hover:scale-105"
                     >
                       <div
-                        className="aspect-[3/4] w-full overflow-hidden rounded-xl bg-gray-200 shadow-lg transition-all duration-300 group-hover:shadow-2xl dark:bg-gray-700"
+                        className="relative aspect-[3/4] w-full overflow-hidden rounded-xl bg-gray-200 shadow-lg transition-all duration-300 group-hover:shadow-2xl dark:bg-gray-700"
                         style={{
                           backgroundImage: `url("${book.coverImage || FALLBACK_COVER}")`,
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                         }}
-                      />
+                      >
+                        <button
+                          type="button"
+                          disabled={wishlistLoadingBookId === book._id}
+                          onClick={(event) => void handleWishlistToggle(event, book)}
+                          className={`absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-md shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-white/50 ${isBookWishlisted(book)
+                            ? "bg-white/90 text-rose-500 hover:bg-white"
+                            : "bg-black/40 text-white hover:bg-black/60"
+                            } disabled:opacity-60`}
+                          aria-label={isBookWishlisted(book) ? "Bỏ yêu thích" : "Thêm yêu thích"}
+                        >
+                          <span className="text-sm leading-none drop-shadow-sm">
+                            {wishlistLoadingBookId === book._id ? "..." : isBookWishlisted(book) ? "♥" : "♡"}
+                          </span>
+                          <span className="drop-shadow-sm">{book.wishlistCount || 0}</span>
+                        </button>
+                      </div>
                       <div className="px-1">
                         <p
                           className="line-clamp-1 text-base font-bold leading-tight text-[#111318] dark:text-white"
@@ -383,26 +400,17 @@ export default function HomePage() {
                           >
                             {book.availableCopies}/{book.totalCopies}
                           </span>
-                          <button
-                            type="button"
-                            disabled={wishlistLoadingBookId === book._id}
-                            onClick={(event) => void handleWishlistToggle(event, book)}
-                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${isBookWishlisted(book)
-                              ? "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
-                              : "border-gray-300 bg-white text-gray-600 hover:border-rose-300 hover:text-rose-600 dark:border-gray-600 dark:bg-transparent dark:text-gray-300"
-                              } disabled:opacity-60`}
-                            aria-label={isBookWishlisted(book) ? "Bỏ yêu thích" : "Thêm yêu thích"}
-                          >
-                            {wishlistLoadingBookId === book._id
-                              ? "..."
-                              : isBookWishlisted(book)
-                                ? "♥"
-                                : "♡"}
-                          </button>
+
                           <span className="text-xs font-semibold rounded-full bg-blue-100 px-2 py-1 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                             {libraryPresenceByBookId[book._id] && libraryPresenceByBookId[book._id] > 1
                               ? `Có ở ${libraryPresenceByBookId[book._id]} thư viện`
                               : "1 thư viện"}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                          <span className="rounded-full bg-yellow-100 px-2 py-1 font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">
+                            ⭐ {book.averageRating ? `${book.averageRating}/5` : "N/A"}
                           </span>
                         </div>
                       </div>
@@ -452,7 +460,7 @@ export default function HomePage() {
         </section>
 
         <Footer />
-      </div>
+</div>
     </div>
   );
 }

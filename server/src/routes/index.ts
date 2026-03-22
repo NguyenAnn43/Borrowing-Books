@@ -8,6 +8,8 @@ import borrowingRoutes from './borrowingRoutes';
 import reservationRoutes from './reservationRoutes';
 import notificationRoutes from './notificationRoutes';
 import wishlistRoutes from './wishlistRoutes';
+import reviewRoutes from './reviewRoutes';
+import paymentRoutes from './paymentRoutes';
 
 const router: IRouter = Router();
 
@@ -20,6 +22,8 @@ router.use('/borrowings', borrowingRoutes);
 router.use('/reservations', reservationRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/wishlists', wishlistRoutes);
+router.use('/reviews', reviewRoutes);
+router.use('/payments', paymentRoutes);
 
 // Health check
 router.get('/health', (req: Request, res: Response) => {

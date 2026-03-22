@@ -46,6 +46,17 @@ export const NOTIFICATION_TYPE = {
     SYSTEM: 'system',
 } as const;
 
+export const REVIEW_REPORT_STATUS = {
+    PENDING: 'pending',
+    RESOLVED: 'resolved',
+} as const;
+
+export const REVIEW_ADMIN_ACTION = {
+    KEEP: 'keep',
+    HIDE: 'hide',
+    DELETE: 'delete',
+} as const;
+
 export const BOOK_CATEGORIES = [
     'Công nghệ thông tin',
     'Khoa học tự nhiên',
@@ -91,4 +102,6 @@ export type BookStatus = typeof BOOK_STATUS[keyof typeof BOOK_STATUS];
 export type BorrowingStatus = typeof BORROWING_STATUS[keyof typeof BORROWING_STATUS];
 export type ReservationStatus = typeof RESERVATION_STATUS[keyof typeof RESERVATION_STATUS];
 export type NotificationType = typeof NOTIFICATION_TYPE[keyof typeof NOTIFICATION_TYPE];
+export type ReviewReportStatus = typeof REVIEW_REPORT_STATUS[keyof typeof REVIEW_REPORT_STATUS];
+export type ReviewAdminAction = typeof REVIEW_ADMIN_ACTION[keyof typeof REVIEW_ADMIN_ACTION];
 export type BookCategory = typeof BOOK_CATEGORIES[number];

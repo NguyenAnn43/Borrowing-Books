@@ -9,6 +9,7 @@ export const createReservationSchema = {
 
 export const getReservationsSchema = {
     query: z.object({
+        q: z.string().optional(),
         status: z.enum(['pending', 'ready', 'completed', 'cancelled', 'expired']).optional(),
         libraryId: z.string().optional(),
         userId: z.string().optional(),

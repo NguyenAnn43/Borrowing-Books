@@ -75,6 +75,12 @@ const bookSchema = new Schema<IBook>(
             default: 0,
             min: [0, 'Wishlist count cannot be negative'],
         },
+        averageRating: {
+            type: Number,
+            default: null,
+            min: [1, 'Average rating cannot be below 1'],
+            max: [5, 'Average rating cannot exceed 5'],
+        },
         status: {
             type: String,
             enum: Object.values(BOOK_STATUS),
@@ -114,8 +120,10 @@ bookSchema.pre('findOneAndUpdate', function (next) {
     const update = this.getUpdate() as
         | {
             isbn?: string | null;
+            isbnNormalized?: string | null;
             $set?: {
                 isbn?: string | null;
+                isbnNormalized?: string | null;
             };
           }
         | undefined;
