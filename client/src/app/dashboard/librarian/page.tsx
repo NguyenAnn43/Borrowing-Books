@@ -179,7 +179,7 @@ export default function LibrarianDashboard() {
                                     ))}
                                 </div>
                                 <div className="mt-4 rounded-xl border border-white/10 bg-slate-900/60 p-3 text-xs text-slate-300">
-                                    Tổng phạt phát sinh 12 tháng: <span className="text-emerald-300 font-semibold">{formatMoney((analytics?.fineIncurredByMonth || []).reduce((sum, item) => sum + item.totalFineIncurred, 0))}</span>
+                                    Tổng phạt 12 tháng: <span className="text-emerald-300 font-semibold">{formatMoney((analytics?.fineIncurredByMonth || []).reduce((sum, item) => sum + item.totalFineIncurred, 0))}</span>
                                 </div>
                             </div>
 
